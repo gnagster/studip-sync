@@ -22,7 +22,8 @@ class GeneralLogin(LoginBase):
 
         login_params_auth = {
             "loginname": username,
-            "password": password
+            "password": password,
+            "Login": "1"
         }
 
         login_params = {**login_params_auth, **login_data['params']}
@@ -34,9 +35,10 @@ class GeneralLogin(LoginBase):
                 raise LoginError("Wrong credentials, cannot login")
 
         # Test if logged in
-        with session.session.post(session.url.studip_main()) as response:
-            if not response.ok or "Veranstaltungen" not in response.text:
-                raise LoginError("Cannot access Stud.IP main page")
+        with session.session.get(session.url.studip_main()) as response:
+            soup = BeautifulSoup(response.text, 'lxml')
+            if not response.ok or soup.select_one('#header_avatar_image_link') is None:
+                raise LoginError("Login was not accepted; check your saved username and password")
 
     @staticmethod
     def extract_login_data(html):
@@ -45,7 +47,9 @@ class GeneralLogin(LoginBase):
         response = {}
 
         for form in soup.find_all('form'):
-            if 'action' in form.attrs:
+            if ('action' in form.attrs
+                    and form.select_one('input[name=loginname]') is not None
+                    and form.select_one('input[name=password]') is not None):
                 response['action'] = form.attrs['action']
                 response['params'] = {}
 

@@ -1,5 +1,7 @@
 import json
 import re
+import os
+from urllib.parse import unquote, urlsplit
 from email.message import EmailMessage
 
 from functools import wraps
@@ -12,8 +14,6 @@ def log_html_on_exception():
             try:
                 return func(html, *args, **kwargs)
             except Exception as e:
-                print(html)
-                
                 raise e
 
         return inner
@@ -132,13 +132,20 @@ def extract_csrf_token(html):
 def extract_courses(html, only_recent_semester):
     soup = BeautifulSoup(html, 'lxml')
 
-    p = re.compile("MyCoursesData = (.*);")
     courses = None
     for script in soup.find_all("script"):
         try: 
-            courses = json.loads(script.string.split("MyCoursesData = ")[1].split(";")[0])
+            courses = json.JSONDecoder().raw_decode(script.string.split("MyCoursesData = ", 1)[1])[0]
         except Exception:
             continue
+
+    if courses is None:
+        for script in soup.select('[data-vue-app] script[type="application/json"]'):
+            data = json.loads(script.string)
+            if data.get('appPath') == 'my-courses/MyCourses':
+                store = data['vuexStoreData']['mycourses']
+                courses = {'groups': store['setGroups'], 'courses': store['setCourses']}
+                break
 
     if courses is None:
         raise ParserError("Could not find courses")
@@ -150,7 +157,7 @@ def extract_courses(html, only_recent_semester):
         if only_recent_semester and semester_id != len(courses["groups"]):
             continue
     
-        course_ids = group["data"][0]["ids"]
+        course_ids = dict.fromkeys(course_id for subgroup in group['data'] for course_id in subgroup['ids'])
         for course_id  in course_ids:
             course = courses["courses"][course_id]
             save_as = course["name"].strip()
@@ -221,6 +228,8 @@ def extract_media_best_download_link(html):
 
     def extract_iframe(_, s):
         iframe = s.find("iframe", id="framed_player")
+        if not iframe and len(s.find_all('iframe')) == 1:
+            iframe = s.find('iframe')
         if not iframe:
             raise ParserError("media_download_link: No iframe found")
 
@@ -230,7 +239,7 @@ def extract_media_best_download_link(html):
         return iframe.attrs["src"]
 
     def extract_video(_, s):
-        video = s.find("video", id="mediaplayer_html5_api")
+        video = s.select_one('video[src], video source[src]')
         if not video:
             raise ParserError("media_download_link: No video item found")
 
@@ -250,12 +259,22 @@ def extract_media_best_download_link(html):
         return links[len(links) - 1]
 
 
-    return try_parser_functions(html, [extract_table, extract_iframe, extract_video, extract_video_regex])
+    def extract_camtasia(h, _):
+        match = re.search(r'playerConfiguration\.addMediaSrc\(["\x27]([^"\x27]+)["\x27]\)', h)
+        if not match:
+            raise ParserError('No Camtasia media source found')
+        return match.group(1)
+
+    return try_parser_functions(html, [extract_table, extract_iframe, extract_video, extract_camtasia, extract_video_regex])
 
 
 @log_html_on_exception()
-def extract_filename_from_headers(headers):
+def extract_filename_from_headers(headers, download_url=None):
     if "Content-Disposition" not in headers:
+        if download_url and headers.get('Content-Type', '').split(';')[0].startswith(('video/', 'audio/', 'application/octet-stream')):
+            filename = os.path.basename(unquote(urlsplit(download_url).path))
+            if filename not in ('', '.', '..'):
+                return filename
         raise ParserError(
             "media_filename_headers: \"Content-Disposition\" is missing")
 

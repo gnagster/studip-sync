@@ -146,6 +146,9 @@ def check_and_cleanup_form_data(form_data_files, form_data_folders, use_api):
                 "chdate": int(form_data["chdate"])
             }
 
+            if new_file_data['name'] in ('', '.', '..'):
+                raise ParserError('Invalid filename')
+
             if not use_api:
                 new_file_data["download_url"] = form_data["download_url"]
 
@@ -163,6 +166,9 @@ def check_and_cleanup_form_data(form_data_files, form_data_folders, use_api):
             form_id = form_data["id"]
             if not all(c in string.hexdigits for c in form_id):
                 raise ValueError("id is not hexadecimal")
+
+            if form_data['name'] in ('', '.', '..'):
+                raise ValueError('Invalid folder name')
 
             form_data_folders_new.append({
                 "name": unicodedata.normalize(UNICODE_NORMALIZE_MODE, form_data["name"]).replace("/", "--"),
@@ -241,7 +247,7 @@ class CourseRSync:
         if sync_fully:
             return True
 
-        return self.session.check_course_new_files(self.course_id, CONFIG.last_sync)
+        return self.session.check_course_new_files(self.course_id, CONFIG.last_sync, self.use_api)
 
     def download_recursive(self, folder_id=None, folder_path_relative=""):
         try:
