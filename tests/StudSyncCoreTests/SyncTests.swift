@@ -57,6 +57,38 @@ private struct Scratch {
     #expect(try String(contentsOf: root.appendingPathComponent(second.components[0]), encoding: .utf8) == "same")
 }
 
+@Test func renamedDestinationCannotReuseAnotherPathsBaselineOrSkipIt() async throws {
+    for (revision, existing, incoming) in [("1", "user", "same"), ("2", "same", "next")] {
+        let scratch = try Scratch(); defer { scratch.remove() }
+        let engine = try SyncEngine(manifest: scratch.root.appendingPathComponent("manifest.json"))
+        var remote = RemoteFile(id: "aa", components: ["old.pdf"], size: 4, revision: "1")
+        _ = try await engine.synchronize(remote, courseID: "bb", root: scratch.root) { try scratch.download("same") }
+        let target = scratch.root.appendingPathComponent("new.pdf")
+        try Data(existing.utf8).write(to: target)
+        remote.components = ["new.pdf"]; remote.revision = revision
+        let change = try await engine.synchronize(remote, courseID: "bb", root: scratch.root) { try scratch.download(incoming) }
+        #expect(change?.conflict == true)
+        #expect(try String(contentsOf: target, encoding: .utf8) == existing)
+        #expect(try String(contentsOf: scratch.root.appendingPathComponent("old.pdf"), encoding: .utf8) == "same")
+        #expect(try String(contentsOf: URL(fileURLWithPath: #require(change).path), encoding: .utf8) == incoming)
+    }
+}
+
+@Test func prototypeManifestDoesNotAuthorizeReplacingAnUnknownDestination() async throws {
+    let scratch = try Scratch(); defer { scratch.remove() }
+    let target = scratch.root.appendingPathComponent("notes.pdf")
+    try Data("same".utf8).write(to: target)
+    let manifest = scratch.root.appendingPathComponent("manifest.json")
+    let key = scratch.root.standardizedFileURL.resolvingSymlinksInPath().path + "/bb/aa"
+    let data = try JSONSerialization.data(withJSONObject: [key: ["revision": "1", "baselineHash": SyncEngine.hash(target)]])
+    try data.write(to: manifest)
+    let engine = try SyncEngine(manifest: manifest)
+    let remote = RemoteFile(id: "aa", components: ["notes.pdf"], size: 4, revision: "2")
+    let change = try await engine.synchronize(remote, courseID: "bb", root: scratch.root) { try scratch.download("next") }
+    #expect(change?.conflict == true)
+    #expect(try String(contentsOf: target, encoding: .utf8) == "same")
+}
+
 @Test func untouchedFilesReplaceWithoutBackupsAndSkipUnchanged() async throws {
     let scratch = try Scratch(); defer { scratch.remove() }
     let root = scratch.root.appendingPathComponent("sync")

@@ -6,6 +6,7 @@ public actor SyncEngine {
         var revision: String
         var baselineHash: String?
         var incomingPath: String?
+        var targetPath: String?
     }
     private let manifest: URL
     private var records: [String: Record]
@@ -29,7 +30,8 @@ public actor SyncEngine {
         try Task.checkCancellation()
         let target = try SafePath.destination(root: root, components: file.components)
         let key = root.standardizedFileURL.resolvingSymlinksInPath().path + "/" + courseID + "/" + file.id
-        let old = records[key]
+        // A rename or older manifest cannot establish ownership of this destination.
+        let old = records[key]?.targetPath == target.path ? records[key] : nil
         let manager = FileManager.default
         if old?.revision == file.revision, manager.fileExists(atPath: target.path) {
             if let path = old?.incomingPath {
@@ -46,7 +48,7 @@ public actor SyncEngine {
         _ = try SafePath.destination(root: root, components: file.components)
         let existingHash = manager.fileExists(atPath: target.path) ? try Self.hash(target) : nil
         if existingHash == remoteHash {
-            records[key] = Record(revision: file.revision, baselineHash: remoteHash, incomingPath: nil)
+            records[key] = Record(revision: file.revision, baselineHash: remoteHash, incomingPath: nil, targetPath: target.path)
             try save()
             return nil
         }
@@ -68,7 +70,7 @@ public actor SyncEngine {
         } else { try manager.moveItem(at: staging, to: destination) }
         records[key] = Record(revision: file.revision,
                               baselineHash: conflict ? old?.baselineHash : remoteHash,
-                              incomingPath: conflict ? destination.path : nil)
+                              incomingPath: conflict ? destination.path : nil, targetPath: target.path)
         try save()
         return Change(name: destination.lastPathComponent, path: destination.path, conflict: conflict)
     }
