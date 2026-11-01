@@ -10,6 +10,7 @@ let package = Package(
     targets: [
         .target(name: "StudSyncCore", dependencies: ["SwiftSoup"]),
         .executableTarget(name: "StudSyncApp", dependencies: ["StudSyncCore"], resources: [.process("Resources")]),
-        .testTarget(name: "StudSyncCoreTests", dependencies: ["StudSyncCore"])
+        .testTarget(name: "StudSyncCoreTests", dependencies: ["StudSyncCore"]),
+        .testTarget(name: "StudSyncAppTests", dependencies: ["StudSyncApp", "StudSyncCore"])
     ]
 )

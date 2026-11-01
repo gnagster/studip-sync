@@ -21,17 +21,22 @@ final class AppStore {
     var bytes: Int64 = 0
     var showWebLogin = false
     var changes: [Change] { preferences.changes }
-    let client = StudIPClient()
+    let client: StudIPClient
+    var nextSync: Date?
     private var engine: SyncEngine?
     private var storageError: String?
     private var task: Task<Void, Never>?
     private var timer: Task<Void, Never>?
-    private let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("StudSync")
+    private var reconnectPending = false
+    private let support: URL
     private var settingsURL: URL { support.appendingPathComponent("settings.json") }
 
-    init() {
+    init(support: URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("StudSync"),
+         client: StudIPClient = StudIPClient(), loadStoredState: Bool = true) {
+        self.support = support; self.client = client
         do { engine = try SyncEngine(manifest: support.appendingPathComponent("manifest.json")) }
         catch { storageError = error.localizedDescription; message = storageError }
+        guard loadStoredState else { return }
         do {
             if FileManager.default.fileExists(atPath: settingsURL.path) {
                 preferences = try JSONDecoder().decode(Preferences.self, from: Data(contentsOf: settingsURL))
@@ -48,9 +53,10 @@ final class AppStore {
         guard !isBusy else { return }
         guard engine != nil else { message = storageError; return }
         let credentials = Credentials(username: username.trimmingCharacters(in: .whitespacesAndNewlines), password: password)
+        reconnectPending = false
         isBusy = true; message = nil; status = "Signing in…"
         task = Task {
-            defer { isBusy = false }
+            defer { isBusy = false; schedule() }
             do {
                 try await client.signIn(username: credentials.username, password: credentials.password)
                 try CredentialVault.save(credentials)
@@ -60,8 +66,16 @@ final class AppStore {
                     preferences.selectedCourses = Set(courses.map(\.id))
                 }
                 password = ""
-                if preferences.setupComplete { schedule(); syncAfterConnection() }
-            } catch { signedIn = false; status = "Sign-in required"; message = error.localizedDescription }
+                if preferences.setupComplete { syncAfterConnection() }
+            } catch {
+                signedIn = false
+                if let error = error as? URLError {
+                    reconnectPending = [.notConnectedToInternet, .networkConnectionLost, .timedOut,
+                                        .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed].contains(error.code)
+                } else if case StudSyncError.http(let code) = error { reconnectPending = (500..<600).contains(code) }
+                status = reconnectPending ? "Waiting for connection" : "Sign-in required"
+                message = error.localizedDescription
+            }
         }
     }
     private func syncAfterConnection() {
@@ -130,17 +144,18 @@ final class AppStore {
         }
     }
     func cancel() { task?.cancel() }
-    var nextSync: Date? {
-        guard preferences.setupComplete, !paused, preferences.intervalMinutes > 0 else { return nil }
-        return (preferences.lastSync ?? Date()).addingTimeInterval(Double(preferences.intervalMinutes * 60))
-    }
     func schedule() {
         timer?.cancel()
-        guard !paused, signedIn, preferences.setupComplete, preferences.intervalMinutes > 0 else { return }
+        nextSync = nil
+        guard !paused, signedIn || reconnectPending, preferences.setupComplete, preferences.intervalMinutes > 0 else { return }
         let delay = Double(preferences.intervalMinutes * 60)
+        nextSync = Date().addingTimeInterval(delay)
         timer = Task {
-            do { try await Task.sleep(for: .seconds(delay)); sync() } catch { }
+            do { try await Task.sleep(for: .seconds(delay)); runScheduledSync() } catch { }
         }
+    }
+    func runScheduledSync() {
+        if reconnectPending { connect() } else { sync() }
     }
     func setPaused(_ value: Bool) { paused = value; schedule() }
     func setLaunchAtLogin(_ value: Bool) {

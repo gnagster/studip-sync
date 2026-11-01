@@ -81,7 +81,12 @@ public actor StudIPClient {
     }
 
     public func signIn(username: String, password: String) async throws {
-        credentials = nil
+        if credentials?.0 == username, credentials?.1 == password {
+            do { _ = try await apiData("users/me", retry: false); return }
+            catch StudSyncError.authentication { }
+        }
+        // A previous attempt may have set a cookie before its final verification failed.
+        signOut()
         let (data, response) = try await session.data(from: Self.origin)
         try check(response)
         let (action, fields) = try Self.loginFields(html: String(decoding: data, as: UTF8.self), username: username, password: password)
@@ -163,13 +168,15 @@ public actor StudIPClient {
             let byID = Dictionary(uniqueKeysWithValues: folders.map { ($0.id, $0) })
             let files = try await list("courses/\(course.id)/file-refs", as: FileAttributes.self)
             return try files.filter { $0.attributes.downloadable && $0.attributes.filesize != nil }.map { file in
-                var components = [file.attributes.name]
+                var components = [try SafePath.remoteComponent(file.attributes.name, id: file.id, isFile: true)]
                 var parent = file.relationships?.parent?.data?.id
                 var seen: Set<String> = []
                 while let id = parent {
                     guard seen.insert(id).inserted, let folder = byID[id] else { throw StudSyncError.unsafePath }
                     parent = folder.relationships?.parent?.data?.id
-                    if parent != nil { components.insert(folder.attributes.name, at: 0) }
+                    if parent != nil {
+                        components.insert(try SafePath.remoteComponent(folder.attributes.name, id: folder.id, isFile: false), at: 0)
+                    }
                 }
                 components.insert("\(course.title) [\(course.id)]", at: 0)
                 return RemoteFile(id: file.id, components: components, size: file.attributes.filesize!, revision: file.attributes.chdate)

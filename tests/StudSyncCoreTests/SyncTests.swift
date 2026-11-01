@@ -24,6 +24,39 @@ private struct Scratch {
     #expect(throws: StudSyncError.self) { try SafePath.destination(root: scratch.root, components: ["escape", "file"]) }
 }
 
+@Test func remoteNamesKeepDistinctIdentitiesAndExtensions() throws {
+    let names = ["①.pdf", "1.pdf", "a/b.pdf", "a--b.pdf", "NOTES.pdf", "notes.pdf"]
+    let components = try names.enumerated().map {
+        try SafePath.remoteComponent($0.element, id: String($0.offset, radix: 16), isFile: true)
+    }
+    #expect(Set(components.map { $0.lowercased() }).count == names.count)
+    #expect(components.allSatisfy { $0.hasSuffix(".pdf") })
+    #expect(try SafePath.remoteComponent("Notes", id: "aa", isFile: false) != SafePath.remoteComponent("Notes", id: "aa", isFile: true))
+    #expect(try SafePath.remoteComponent("foo. [folder-bb]", id: "aa", isFile: true) != SafePath.remoteComponent("foo [file-aa].", id: "bb", isFile: false))
+    let long = try SafePath.remoteComponent(String(repeating: "ü", count: 200) + ".pdf", id: "aa", isFile: true)
+    #expect(long.utf8.count <= 255)
+    #expect(long.hasSuffix(" [file-aa].pdf"))
+    #expect(throws: StudSyncError.self) { try SafePath.remoteComponent("file", id: "../bad", isFile: true) }
+    #expect(throws: StudSyncError.self) { try SafePath.remoteComponent("．．", id: "aa", isFile: false) }
+}
+
+@Test func normalizedRemoteFilesNeverShareTheirBaselines() async throws {
+    let scratch = try Scratch(); defer { scratch.remove() }
+    let root = scratch.root.appendingPathComponent("sync")
+    let engine = try SyncEngine(manifest: scratch.root.appendingPathComponent("manifest.json"))
+    var first = RemoteFile(id: "aa", components: [try SafePath.remoteComponent("①.pdf", id: "aa", isFile: true)], size: 4, revision: "1")
+    let second = RemoteFile(id: "bb", components: [try SafePath.remoteComponent("1.pdf", id: "bb", isFile: true)], size: 4, revision: "1")
+    for file in [first, second] {
+        _ = try await engine.synchronize(file, courseID: "cc", root: root) { try scratch.download("same") }
+    }
+    first.revision = "2"
+    _ = try await engine.synchronize(first, courseID: "cc", root: root) { try scratch.download("next") }
+    let skipped = try await engine.synchronize(second, courseID: "cc", root: root) { throw URLError(.badURL) }
+    #expect(skipped == nil)
+    #expect(try String(contentsOf: root.appendingPathComponent(first.components[0]), encoding: .utf8) == "next")
+    #expect(try String(contentsOf: root.appendingPathComponent(second.components[0]), encoding: .utf8) == "same")
+}
+
 @Test func untouchedFilesReplaceWithoutBackupsAndSkipUnchanged() async throws {
     let scratch = try Scratch(); defer { scratch.remove() }
     let root = scratch.root.appendingPathComponent("sync")

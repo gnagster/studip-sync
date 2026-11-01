@@ -24,6 +24,10 @@ StudSync runs in the menu bar after its window closes. It defaults to hourly syn
 
 Untouched files are updated atomically without retaining old copies. Locally edited files remain intact, with incoming server versions saved beside them. Remote deletion never deletes your local files. Use the menu-bar panel to see changes and reveal files in Finder.
 
+Remote files and folders include stable Stud.IP ID markers in their names, so Unicode normalization, case differences, duplicate names, and replaced separators cannot combine separate resources. File extensions are retained; excessively long stems are shortened. Upgrading from the initial native prototype creates these new paths and preserves files at the old paths rather than deleting or moving them.
+
+If startup is offline, configured automatic sync retries the connection at the selected interval. Paused/manual sync does not retry automatically, and rejected credentials require your attention.
+
 ## Verification
 
 ```sh

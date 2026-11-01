@@ -61,6 +61,33 @@ struct ClientTests {
         }
         await #expect(throws: StudSyncError.self) { try await client().signIn(username: "fixture", password: "not-real") }
     }
+    @Test func reconnectReusesVerifiedSessionAfterTransientCourseFailure() async throws {
+        FixtureProtocol.handler = { request in
+            if request.url!.path.hasPrefix("/jsonapi") { return (200, "application/json", #"{"data":{"id":"bb"}}"#) }
+            return (200, "text/html", #"<form action="/dispatch.php/login"><input name="loginname"><input name="password"></form>"#)
+        }
+        let client = client()
+        try await client.signIn(username: "fixture", password: "not-real")
+        FixtureProtocol.handler = { _ in throw URLError(.notConnectedToInternet) }
+        await #expect(throws: URLError.self) { try await client.courses() }
+        FixtureProtocol.handler = { request in
+            #expect(request.url!.path == "/jsonapi.php/v1/users/me")
+            return (200, "application/json", #"{"data":{"id":"bb"}}"#)
+        }
+        try await client.signIn(username: "fixture", password: "not-real")
+    }
+    @Test func apiUsesDistinctRemoteFileAndFolderIdentities() async throws {
+        FixtureProtocol.handler = { request in
+            if request.url!.path.hasSuffix("folders") {
+                return (200, "application/json", #"{"data":[{"id":"cc","attributes":{"name":"Root"}},{"id":"aa","attributes":{"name":"①"},"relationships":{"parent":{"data":{"id":"cc"}}}},{"id":"bb","attributes":{"name":"1"},"relationships":{"parent":{"data":{"id":"cc"}}}}]}"#)
+            }
+            return (200, "application/json", #"{"data":[{"id":"dd","attributes":{"name":"①.pdf","filesize":4,"chdate":"1","is-downloadable":true},"relationships":{"parent":{"data":{"id":"aa"}}}},{"id":"ee","attributes":{"name":"1.pdf","filesize":4,"chdate":"1","is-downloadable":true},"relationships":{"parent":{"data":{"id":"aa"}}}},{"id":"ff","attributes":{"name":"1.pdf","filesize":4,"chdate":"1","is-downloadable":true},"relationships":{"parent":{"data":{"id":"bb"}}}}]}"#)
+        }
+        let files = try await client().files(course: Course(id: "99", title: "Course"))
+        #expect(Set(files.map { $0.components.joined(separator: "/").lowercased() }).count == 3)
+        #expect(files[0].components[1] == files[1].components[1])
+        #expect(files[0].components[1] != files[2].components[1])
+    }
     @Test func htmlAttachmentsRequireAValidSessionRatherThanADifferentMimeType() async throws {
         let response = HTTPURLResponse(url: StudIPClient.origin.appendingPathComponent("jsonapi.php/v1/file-refs/aa/content"), statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "text/html"])!
         for valid in [true, false] {
