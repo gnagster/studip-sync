@@ -34,6 +34,8 @@ python3 -m venv .venv
 
 Verification runs legacy Python tests (including optional Google Tasks security tests), native Swift tests, a release app build, and whitespace validation. CI runs native and reference tests plus CodeQL. Fixtures are synthetic and do not require university credentials.
 
+An optional live check is available with `STUDSYNC_LIVE_TEST=1 swift test --filter liveGoettingenReadOnlyCheck`. It reads the existing CLI credentials locally, signs into Göttingen, and verifies a small course-file download in a temporary location. It never runs in CI and does not change the sync destination or university files.
+
 ## Development
 
 See [AGENTS.md](AGENTS.md), [security policy](SECURITY.md), [roadmap](docs/ROADMAP.md), and [automation notes](docs/AUTOMATION.md). Development uses the owner's ChatGPT subscription; no OpenAI API credentials or API-billed Codex Actions are used. Automatic code review is configured in Codex repository settings, not by workflow YAML.

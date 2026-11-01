@@ -74,13 +74,10 @@ func liveGoettingenReadOnlyCheck() async throws {
     let client = StudIPClient()
     try await client.signIn(username: config.user.login, password: config.user.password)
     let courses = try await client.courses()
-    #expect(!courses.isEmpty)
-    if let course = courses.first {
-        let files = try await client.files(course: course)
-        if let file = files.first, file.size < 10_000_000 {
-            let temporary = try await client.download(id: file.id)
-            defer { try? FileManager.default.removeItem(at: temporary) }
-            #expect(Int64(try temporary.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? -1) == file.size)
-        }
-    }
+    let course = try #require(courses.first)
+    let files = try await client.files(course: course)
+    let remote = try #require(files.first(where: { $0.size < 10_000_000 }))
+    let temporary = try await client.download(id: remote.id)
+    defer { try? FileManager.default.removeItem(at: temporary) }
+    #expect(Int64(try temporary.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? -1) == remote.size)
 }
