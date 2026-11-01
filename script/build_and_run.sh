@@ -6,7 +6,8 @@ MODE="${1:-run}"
 case "$MODE" in run|--build|--verify|--debug|--logs|--telemetry) ;; *) echo 'Usage: build_and_run.sh [--build|--verify|--debug|--logs|--telemetry]' >&2; exit 2 ;; esac
 swift build -c release
 BIN_DIR="$(swift build -c release --show-bin-path)"
-APP="$ROOT_DIR/dist/StudSync.app"
+# Keep the installed bundle outside synced Documents folders and at a stable login-item path.
+APP="$HOME/Applications/StudSync.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_DIR/StudSync" "$APP/Contents/MacOS/StudSync"
 for resource in "$BIN_DIR"/*.bundle; do
@@ -33,6 +34,7 @@ PLIST
 # Only strip copied build metadata from the app we just generated.
 xattr -cr "$APP"
 codesign --force --deep --sign - --identifier com.gnagster.StudSync "$APP"
+codesign --verify --deep --strict "$APP"
 if [[ "$MODE" == --build ]]; then exit 0; fi
 pkill -x StudSync >/dev/null 2>&1 || true
 case "$MODE" in

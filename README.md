@@ -10,9 +10,9 @@ Install Xcode and select its developer directory, then:
 ./script/build_and_run.sh
 ```
 
-The script resolves the pinned Swift package, builds a release app, stages `dist/StudSync.app`, signs it locally, and launches it. Codex's Run action uses the same command. `--build` only packages the app; `--verify` launches it and verifies the process. `--logs`, `--telemetry`, and `--debug` support local diagnostics. Open `Package.swift` in Xcode for native editing/debugging.
+The script resolves the pinned Swift package, builds a release app, installs it at `~/Applications/StudSync.app`, signs and verifies it locally, and launches it. This stable location avoids file-provider metadata interfering with signatures in synced Documents folders and supports Start at Login. Codex's Run action uses the same command. `--build` builds/installs without launching; `--verify` launches it and verifies the process. `--logs`, `--telemetry`, and `--debug` support local diagnostics. Open `Package.swift` in Xcode for native editing/debugging.
 
-This is an ad-hoc-signed personal build, not a notarized public distribution. No Python installation is needed to run the native app. Keep the built app at a stable location before enabling Start at Login.
+This is an ad-hoc-signed personal build, not a notarized public distribution. No Python installation is needed to run the native app. Keep the app at its installed location after enabling Start at Login.
 
 ## First launch
 
