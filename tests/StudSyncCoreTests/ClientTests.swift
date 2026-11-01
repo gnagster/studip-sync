@@ -61,6 +61,38 @@ struct ClientTests {
         }
         await #expect(throws: StudSyncError.self) { try await client().signIn(username: "fixture", password: "not-real") }
     }
+    @Test func htmlAttachmentsRequireAValidSessionRatherThanADifferentMimeType() async throws {
+        let response = HTTPURLResponse(url: StudIPClient.origin.appendingPathComponent("jsonapi.php/v1/file-refs/aa/content"), statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "text/html"])!
+        for valid in [true, false] {
+            FixtureProtocol.handler = { _ in
+                valid ? (200, "application/json", #"{"data":{"id":"bb"}}"#) : (401, "application/json", "{}")
+            }
+            if valid { try await client().validateDownload(response) }
+            else { await #expect(throws: StudSyncError.self) { try await client().validateDownload(response) } }
+        }
+    }
+    @Test func unavailableCourseDoesNotBlockOtherCourseFiles() async throws {
+        for disabled in ["folders", "file-refs"] {
+            FixtureProtocol.handler = { request in
+                if request.url!.path == "/jsonapi.php/v1/courses/aa/\(disabled)" { return (403, "application/json", "{}") }
+                if request.url!.path.hasSuffix("folders") { return (200, "application/json", #"{"data":[]}"#) }
+                return (200, "application/json", #"{"data":[{"id":"ee","attributes":{"name":"notes.html","filesize":5,"chdate":"1","is-downloadable":true}}]}"#)
+            }
+            let client = client()
+            #expect(try await client.files(course: Course(id: "aa", title: "Unavailable")).isEmpty)
+            #expect(try await client.files(course: Course(id: "bb", title: "Available")).count == 1)
+        }
+    }
+    @Test func duplicateCourseTitlesHaveSeparateDirectories() async throws {
+        FixtureProtocol.handler = { request in
+            if request.url!.path.hasSuffix("folders") { return (200, "application/json", #"{"data":[]}"#) }
+            return (200, "application/json", #"{"data":[{"id":"ee","attributes":{"name":"notes.pdf","filesize":5,"chdate":"1","is-downloadable":true}}]}"#)
+        }
+        let client = client()
+        let first = try await client.files(course: Course(id: "aa", title: "Seminar"))
+        let second = try await client.files(course: Course(id: "bb", title: "Seminar"))
+        #expect(first[0].components[0] != second[0].components[0])
+    }
 }
 
 @Test(.enabled(if: ProcessInfo.processInfo.environment["STUDSYNC_LIVE_TEST"] == "1"))

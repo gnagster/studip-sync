@@ -14,7 +14,7 @@ Build native Swift, retaining Python as a reference until native parity is prove
 
 ## Verified in the initial native implementation
 
-November 1, 2026: 16 reference Python tests, nine synthetic native tests, and an opt-in live Göttingen login/course/file/download check passed. A release app was packaged and launched, and the German first-run window was inspected. Native tests cover path traversal/symlinks, pagination, rejected login, edited-file preservation, atomic updates, cancellation, and incorrect download sizes. Full interactive setup, automatic session renewal, Start at Login, offline recovery, accessibility, and battery profiling remain acceptance work. The exact five-hour start was prepared as an automation card and still requires confirmation in Codex.
+November 1, 2026: 16 reference Python tests, twelve synthetic native tests, and an opt-in live Göttingen login/course/file/download check passed. A release app was installed in `~/Applications`, its signature verified, and the German first-run window inspected. Native tests cover path traversal/symlinks, pagination, rejected login, HTML attachment/session distinction, unavailable course areas, duplicate course titles, edited-file preservation, atomic updates, cancellation, and incorrect download sizes. Full interactive setup, automatic session renewal, Start at Login, offline recovery, accessibility, and battery profiling remain acceptance work. The exact five-hour start was prepared as an automation card and still requires confirmation in Codex. The first hosted review posted findings without implementing or pushing fixes; the local development session addressed them. Automatic repair and merge remain unverified platform capabilities.
 
 ## Defaults
 

@@ -47,12 +47,13 @@ final class AppStore {
     func connect() {
         guard !isBusy else { return }
         guard engine != nil else { message = storageError; return }
+        let credentials = Credentials(username: username.trimmingCharacters(in: .whitespacesAndNewlines), password: password)
         isBusy = true; message = nil; status = "Signing in…"
         task = Task {
             defer { isBusy = false }
             do {
-                try await client.signIn(username: username.trimmingCharacters(in: .whitespacesAndNewlines), password: password)
-                try CredentialVault.save(Credentials(username: username, password: password))
+                try await client.signIn(username: credentials.username, password: credentials.password)
+                try CredentialVault.save(credentials)
                 courses = try await client.courses()
                 signedIn = true; status = "Ready"
                 if preferences.selectedCourses.isEmpty && !preferences.setupComplete {

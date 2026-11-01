@@ -158,40 +158,49 @@ public actor StudIPClient {
     }
 
     public func files(course: Course) async throws -> [RemoteFile] {
-        let folders = try await list("courses/\(course.id)/folders", as: FolderAttributes.self)
-        let byID = Dictionary(uniqueKeysWithValues: folders.map { ($0.id, $0) })
-        let files = try await list("courses/\(course.id)/file-refs", as: FileAttributes.self)
-        return try files.filter { $0.attributes.downloadable && $0.attributes.filesize != nil }.map { file in
-            var components = [file.attributes.name]
-            var parent = file.relationships?.parent?.data?.id
-            var seen: Set<String> = []
-            while let id = parent {
-                guard seen.insert(id).inserted, let folder = byID[id] else { throw StudSyncError.unsafePath }
-                parent = folder.relationships?.parent?.data?.id
-                if parent != nil { components.insert(folder.attributes.name, at: 0) }
+        do {
+            let folders = try await list("courses/\(course.id)/folders", as: FolderAttributes.self)
+            let byID = Dictionary(uniqueKeysWithValues: folders.map { ($0.id, $0) })
+            let files = try await list("courses/\(course.id)/file-refs", as: FileAttributes.self)
+            return try files.filter { $0.attributes.downloadable && $0.attributes.filesize != nil }.map { file in
+                var components = [file.attributes.name]
+                var parent = file.relationships?.parent?.data?.id
+                var seen: Set<String> = []
+                while let id = parent {
+                    guard seen.insert(id).inserted, let folder = byID[id] else { throw StudSyncError.unsafePath }
+                    parent = folder.relationships?.parent?.data?.id
+                    if parent != nil { components.insert(folder.attributes.name, at: 0) }
+                }
+                components.insert("\(course.title) [\(course.id)]", at: 0)
+                return RemoteFile(id: file.id, components: components, size: file.attributes.filesize!, revision: file.attributes.chdate)
             }
-            components.insert(course.title, at: 0)
-            return RemoteFile(id: file.id, components: components, size: file.attributes.filesize!, revision: file.attributes.chdate)
+        } catch StudSyncError.http(403) {
+            // A disabled course file area must not prevent other courses from syncing.
+            return []
         }
     }
 
     public func download(id: String) async throws -> URL {
         guard id.allSatisfy({ $0.isHexDigit }), !id.isEmpty else { throw StudSyncError.unsafePath }
         let url = Self.origin.appendingPathComponent("jsonapi.php/v1/file-refs/\(id)/content")
-        var (file, response) = try await session.download(from: url)
-        if let http = response as? HTTPURLResponse, http.statusCode == 401 || http.mimeType == "text/html" {
-            try? FileManager.default.removeItem(at: file)
-            guard let (username, password) = credentials else { throw StudSyncError.authentication }
-            try await signIn(username: username, password: password)
-            (file, response) = try await session.download(from: url)
+        for attempt in 0..<2 {
+            let (file, response) = try await session.download(from: url)
+            do {
+                try await validateDownload(response)
+                return file
+            } catch {
+                try? FileManager.default.removeItem(at: file)
+                guard case StudSyncError.authentication = error, attempt == 0,
+                      let (username, password) = credentials else { throw error }
+                try await signIn(username: username, password: password)
+            }
         }
-        do {
-            try check(response)
-            guard (response as? HTTPURLResponse)?.mimeType != "text/html" else { throw StudSyncError.authentication }
-            return file
-        } catch {
-            try? FileManager.default.removeItem(at: file)
-            throw error
-        }
+        throw StudSyncError.authentication
+    }
+
+    func validateDownload(_ response: URLResponse) async throws {
+        try check(response)
+        // HTML is also a legitimate attachment format; verify the session before rejecting it.
+        if response.mimeType == "text/html" { _ = try await apiData("users/me", retry: false) }
     }
 }
