@@ -22,7 +22,7 @@ class PluginBase(object):
         self.config_class = config_class
 
     def hook_configure(self):
-        os.makedirs(self.config_dir, exist_ok=True)
+        os.makedirs(self.config_dir, mode=0o700, exist_ok=True)
 
     def save_plugin_config(self, config):
         JSONConfig.save_config(self.config_filename, config)
