@@ -11,6 +11,7 @@ BIN_DIR="$(swift build -c release --show-bin-path)"
 APP="$HOME/Applications/StudSync.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_DIR/StudSync" "$APP/Contents/MacOS/StudSync"
+cp "$ROOT_DIR/Sources/StudSyncApp/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 for resource in "$BIN_DIR"/*.bundle; do
     if [[ -d "$resource" ]]; then cp -R "$resource" "$APP/Contents/Resources/"; fi
 done
@@ -22,6 +23,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <key>CFBundleIdentifier</key><string>com.gnagster.StudSync</string>
 <key>CFBundleName</key><string>StudSync</string>
 <key>CFBundleDisplayName</key><string>StudSync</string>
+<key>CFBundleIconFile</key><string>AppIcon</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleShortVersionString</key><string>0.1.0</string>
 <key>CFBundleVersion</key><string>1</string>

@@ -1,14 +1,22 @@
 import SwiftUI
 import AppKit
+import Network
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private let connectivity = NWPathMonitor()
     func applicationDidFinishLaunching(_ notification: Notification) {
         let store = AppStore.shared
+        connectivity.pathUpdateHandler = { path in
+            let available = path.status == .satisfied
+            Task { @MainActor in store.networkChanged(available: available) }
+        }
+        connectivity.start(queue: DispatchQueue(label: "com.gnagster.StudSync.connectivity"))
         store.start()
         if !store.preferences.setupComplete { AppWindows.show(store) }
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+    func applicationWillTerminate(_ notification: Notification) { connectivity.cancel() }
 }
 
 @MainActor

@@ -32,10 +32,37 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
+      - name: Determine Swift scan scope
+        id: scope
+        if: matrix.language == 'swift'
+        env:
+          STUDSYNC_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: python3 script/swift_scan_scope.py
       - uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
+        if: matrix.language != 'swift' || steps.scope.outputs.scan == 'true'
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.mode }}
-      - if: matrix.language == 'swift'
+          db-location: ${{ runner.temp }}/codeql_databases
+      - name: Build Swift for CodeQL
+        if: matrix.language == 'swift' && steps.scope.outputs.scan == 'true'
         run: swift build
       - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
+        if: matrix.language != 'swift' || steps.scope.outputs.scan == 'true'
+      - name: Verify first-party Swift source coverage
+        if: matrix.language == 'swift' && steps.scope.outputs.scan == 'true'
+        env:
+          STUDSYNC_CODEQL_DATABASE: ${{ runner.temp }}/codeql_databases/swift
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          from zipfile import ZipFile
+          expected = {str(path.resolve()).lstrip('/') for path in Path('Sources').rglob('*.swift')}
+          with ZipFile(Path(os.environ['STUDSYNC_CODEQL_DATABASE']) / 'src.zip') as archive:
+              missing = expected - set(archive.namelist())
+          if not expected or missing:
+              raise SystemExit(f'Missing first-party Swift sources: {sorted(missing)}')
+          print(f'All {len(expected)} first-party Swift sources are present in the CodeQL archive.')
+          PY

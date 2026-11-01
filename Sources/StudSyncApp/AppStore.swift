@@ -28,20 +28,26 @@ final class AppStore {
     private var task: Task<Void, Never>?
     private var timer: Task<Void, Never>?
     private var reconnectPending = false
+    private var retrySyncWhenOnline = false
+    private var networkAvailable: Bool?
+    private var networkRecoveryPending = false
     private let support: URL
+    private let writeCredentials: (Credentials) throws -> Void
     private var settingsURL: URL { support.appendingPathComponent("settings.json") }
 
     init(support: URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("StudSync"),
-         client: StudIPClient = StudIPClient(), loadStoredState: Bool = true) {
+         client: StudIPClient = StudIPClient(),
+         readCredentials: () throws -> Credentials? = CredentialVault.read,
+         writeCredentials: @escaping (Credentials) throws -> Void = CredentialVault.save) {
         self.support = support; self.client = client
+        self.writeCredentials = writeCredentials
         do { engine = try SyncEngine(manifest: support.appendingPathComponent("manifest.json")) }
         catch { storageError = error.localizedDescription; message = storageError }
-        guard loadStoredState else { return }
         do {
             if FileManager.default.fileExists(atPath: settingsURL.path) {
                 preferences = try JSONDecoder().decode(Preferences.self, from: Data(contentsOf: settingsURL))
             }
-            if let saved = try CredentialVault.read() { username = saved.username; password = saved.password }
+            if let saved = try readCredentials() { username = saved.username; password = saved.password }
         } catch { message = error.localizedDescription }
     }
 
@@ -56,43 +62,44 @@ final class AppStore {
         reconnectPending = false
         isBusy = true; message = nil; status = "Signing in…"
         task = Task {
-            defer { isBusy = false; schedule() }
+            var syncOnSuccess = false
+            defer { isBusy = false; schedule(); if syncOnSuccess { sync() }; resumeAfterNetworkChange() }
             do {
                 try await client.signIn(username: credentials.username, password: credentials.password)
-                try CredentialVault.save(credentials)
+                try writeCredentials(credentials)
                 courses = try await client.courses()
                 signedIn = true; status = "Ready"
                 if preferences.selectedCourses.isEmpty && !preferences.setupComplete {
                     preferences.selectedCourses = Set(courses.map(\.id))
                 }
                 password = ""
-                if preferences.setupComplete { syncAfterConnection() }
+                syncOnSuccess = preferences.setupComplete
             } catch {
                 signedIn = false
-                if let error = error as? URLError {
-                    reconnectPending = [.notConnectedToInternet, .networkConnectionLost, .timedOut,
-                                        .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed].contains(error.code)
-                } else if case StudSyncError.http(let code) = error { reconnectPending = (500..<600).contains(code) }
+                reconnectPending = canRetryConnection(error)
                 status = reconnectPending ? "Waiting for connection" : "Sign-in required"
                 message = error.localizedDescription
             }
         }
     }
-    private func syncAfterConnection() {
-        // The connecting task owns the busy flag until its defer runs.
-        Task { await Task.yield(); if !isBusy { sync() } }
-    }
     func finishSetup() {
-        guard signedIn, !preferences.destination.isEmpty, !preferences.selectedCourses.isEmpty else { return }
+        guard !isBusy, signedIn, !preferences.destination.isEmpty, !preferences.selectedCourses.isEmpty else { return }
+        let wasComplete = preferences.setupComplete
         preferences.setupComplete = true
-        save(); schedule(); sync()
+        guard save() else {
+            preferences.setupComplete = wasComplete
+            status = "Settings need attention"
+            return
+        }
+        schedule(); sync()
     }
-    func save() {
+    @discardableResult func save() -> Bool {
         do {
             try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
             try JSONEncoder().encode(preferences).write(to: settingsURL, options: .atomic)
             try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: settingsURL.path)
-        } catch { message = error.localizedDescription }
+            return true
+        } catch { message = error.localizedDescription; return false }
     }
     func chooseDestination() {
         let panel = NSOpenPanel()
@@ -107,14 +114,66 @@ final class AppStore {
         guard !path.isEmpty else { return }
         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
     }
+    var canSync: Bool {
+        signedIn && !paused && preferences.setupComplete && !preferences.destination.isEmpty && !preferences.selectedCourses.isEmpty
+    }
+    func refreshCourses() {
+        guard !isBusy, signedIn else { return }
+        retrySyncWhenOnline = false
+        isBusy = true; message = nil; status = "Loading courses…"
+        task = Task {
+            defer { isBusy = false; schedule(); resumeAfterNetworkChange() }
+            do { courses = try await client.courses(); status = "Ready" }
+            catch { reportSyncFailure(error) }
+        }
+    }
+    private func reportSyncFailure(_ error: Error) {
+        if error is CancellationError || (error as? URLError)?.code == .cancelled { status = "Cancelled"; return }
+        if case StudSyncError.authentication = error {
+            signedIn = false; reconnectPending = false; status = "Sign-in required"
+        } else { status = "Sync needs attention" }
+        retrySyncWhenOnline = canRetryConnection(error)
+        message = error.localizedDescription
+    }
+    private func canRetryConnection(_ error: Error) -> Bool {
+        if let error = error as? URLError {
+            return [.notConnectedToInternet, .networkConnectionLost, .timedOut,
+                    .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed].contains(error.code)
+        }
+        if case StudSyncError.http(let code) = error { return (500..<600).contains(code) }
+        return false
+    }
+    func networkChanged(available: Bool) {
+        let wasOffline = networkAvailable == false
+        networkAvailable = available
+        if wasOffline && available { networkRecoveryPending = true }
+        resumeAfterNetworkChange()
+    }
+    private func resumeAfterNetworkChange() {
+        guard networkRecoveryPending, !isBusy else { return }
+        networkRecoveryPending = false
+        guard networkAvailable == true, !paused, preferences.setupComplete,
+              preferences.intervalMinutes > 0, !preferences.destination.isEmpty,
+              !preferences.selectedCourses.isEmpty else { return }
+        if signedIn && retrySyncWhenOnline { sync() }
+        else if reconnectPending { connect() }
+    }
     func sync() {
-        guard !isBusy, !paused, signedIn, preferences.setupComplete, let engine else { return }
+        guard !isBusy, canSync, let engine else { return }
+        retrySyncWhenOnline = false
         isBusy = true; message = nil; completed = 0; total = 0; bytes = 0; status = "Checking courses…"
-        let selected = courses.filter { preferences.selectedCourses.contains($0.id) }
+        let selectedIDs = preferences.selectedCourses
         let root = URL(fileURLWithPath: preferences.destination, isDirectory: true)
         task = Task {
-            defer { isBusy = false; schedule() }
+            defer { isBusy = false; schedule(); resumeAfterNetworkChange() }
             do {
+                courses = try await client.courses()
+                let selected = courses.filter { selectedIDs.contains($0.id) }
+                guard !selected.isEmpty else {
+                    status = "Choose courses"
+                    message = "No selected courses are currently available. Check your course selection in Settings."
+                    return
+                }
                 for course in selected {
                     try Task.checkCancellation()
                     status = course.title
@@ -134,20 +193,15 @@ final class AppStore {
                     }
                 }
                 preferences.lastSync = Date(); status = "Up to date"; save()
-            } catch is CancellationError { status = "Cancelled" }
-            catch let error as URLError where error.code == .cancelled { status = "Cancelled" }
-            catch {
-                if case StudSyncError.authentication = error { signedIn = false; status = "Sign-in required" }
-                else { status = "Sync needs attention" }
-                message = error.localizedDescription
-            }
+            } catch { reportSyncFailure(error) }
         }
     }
     func cancel() { task?.cancel() }
     func schedule() {
         timer?.cancel()
         nextSync = nil
-        guard !paused, signedIn || reconnectPending, preferences.setupComplete, preferences.intervalMinutes > 0 else { return }
+        guard !paused, signedIn || reconnectPending, preferences.setupComplete,
+              !preferences.destination.isEmpty, !preferences.selectedCourses.isEmpty, preferences.intervalMinutes > 0 else { return }
         let delay = Double(preferences.intervalMinutes * 60)
         nextSync = Date().addingTimeInterval(delay)
         timer = Task {

@@ -3,9 +3,11 @@ import AppKit
 import WebKit
 import StudSyncCore
 
+let appResourceBundle = Bundle.main.resourceURL
+    .flatMap { Bundle(url: $0.appendingPathComponent("StudSync_StudSyncApp.bundle")) } ?? .module
+
 func L(_ key: String) -> String {
-    let bundled = Bundle.main.resourceURL.flatMap { Bundle(url: $0.appendingPathComponent("StudSync_StudSyncApp.bundle")) }
-    return NSLocalizedString(key, bundle: bundled ?? .module, comment: "")
+    NSLocalizedString(key, bundle: appResourceBundle, comment: "")
 }
 
 struct StatusPanel: View {
@@ -13,7 +15,8 @@ struct StatusPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 10) {
-                Image(systemName: "folder.badge.arrow.down").font(.title2).foregroundStyle(.tint)
+                Image("ClassicFold", bundle: appResourceBundle)
+                    .resizable().scaledToFit().frame(width: 32, height: 32).accessibilityHidden(true)
                 VStack(alignment: .leading) {
                     Text("StudSync").font(.headline)
                     Text(L(store.paused ? "Paused" : store.status)).font(.caption).foregroundStyle(.secondary).lineLimit(2)
@@ -39,7 +42,7 @@ struct StatusPanel: View {
             HStack {
                 Button(L(store.isBusy ? "Cancel" : "Sync now")) {
                     if store.isBusy { store.cancel() } else { store.sync() }
-                }.buttonStyle(.borderedProminent).disabled(!store.signedIn || !store.preferences.setupComplete || store.paused)
+                }.buttonStyle(.borderedProminent).disabled(!store.isBusy && !store.canSync)
                 Button(L(store.paused ? "Resume" : "Pause")) { store.setPaused(!store.paused) }.disabled(store.isBusy)
                 Spacer()
                 Button { store.reveal() } label: { Image(systemName: "folder") }.help(L("Open in Finder")).disabled(store.preferences.destination.isEmpty)
@@ -87,7 +90,8 @@ struct SetupView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 HStack(spacing: 14) {
-                    Image(systemName: "folder.badge.arrow.down").font(.system(size: 42)).foregroundStyle(.tint)
+                    Image("ClassicFold", bundle: appResourceBundle)
+                        .resizable().scaledToFit().frame(width: 56, height: 56).accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(store.preferences.setupComplete ? L("Your courses, in Finder.") : L("Welcome to StudSync")).font(.largeTitle.bold())
                         Text(L("Universität Göttingen · Stud.IP")).foregroundStyle(.secondary)
@@ -96,8 +100,8 @@ struct SetupView: View {
                 GroupBox {
                     VStack(alignment: .leading, spacing: 12) {
                         heading("1", "Connect your university", done: store.signedIn)
-                        TextField(L("Username (without email suffix)"), text: $store.username).textContentType(.username)
-                        SecureField(L("Password"), text: $store.password).textContentType(.password)
+                        TextField(L("Username (without email suffix)"), text: $store.username).textContentType(.username).disabled(store.isBusy)
+                        SecureField(L("Password"), text: $store.password).textContentType(.password).disabled(store.isBusy)
                         HStack {
                             Button(L("Sign in")) { store.connect() }
                                 .buttonStyle(.borderedProminent).disabled(store.username.isEmpty || store.password.isEmpty || store.isBusy)
@@ -128,17 +132,18 @@ struct SetupView: View {
                 GroupBox {
                     VStack(alignment: .leading, spacing: 10) {
                         heading("3", "Choose courses", done: !store.preferences.selectedCourses.isEmpty)
+                        Button(L("Refresh courses")) { store.refreshCourses() }
+                            .font(.caption).disabled(!store.signedIn || store.isBusy)
                         if store.courses.isEmpty {
-                            Text(L("Sign in to load your current courses.")).foregroundStyle(.secondary)
+                            Text(L(store.signedIn ? "No current courses found. You can refresh the list." : "Sign in to load your current courses.")).foregroundStyle(.secondary)
                         } else {
                             HStack {
-                                Button(L("Select all")) { store.preferences.selectedCourses = Set(store.courses.map(\.id)); store.save() }
-                                Button(L("Select none")) { store.preferences.selectedCourses = []; store.save() }
+                                Button(L("Select all")) { store.preferences.selectedCourses = Set(store.courses.map(\.id)) }
+                                Button(L("Select none")) { store.preferences.selectedCourses = [] }
                             }.font(.caption).disabled(store.isBusy)
                             ForEach(store.courses) { course in
                                 Toggle(course.title, isOn: Binding(get: { store.preferences.selectedCourses.contains(course.id) }, set: { value in
                                     if value { store.preferences.selectedCourses.insert(course.id) } else { store.preferences.selectedCourses.remove(course.id) }
-                                    store.save()
                                 })).disabled(store.isBusy)
                             }
                         }
@@ -167,6 +172,7 @@ struct SetupView: View {
             }.padding(26)
         }
         .onChange(of: store.preferences.intervalMinutes) { store.save(); store.schedule() }
+        .onChange(of: store.preferences.selectedCourses) { store.save(); store.schedule() }
         .sheet(isPresented: $store.showWebLogin) { WebLogin(store: store) }
     }
     private func heading(_ number: String, _ title: String, done: Bool) -> some View {

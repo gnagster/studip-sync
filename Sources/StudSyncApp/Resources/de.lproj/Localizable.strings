@@ -13,6 +13,9 @@
 "Choose…" = "Auswählen …";
 "Untouched files update automatically. Local edits are kept; incoming versions appear beside them. Server deletions never delete your files." = "Unveränderte Dateien werden automatisch aktualisiert. Eigene Änderungen bleiben erhalten; neue Versionen werden daneben gespeichert. Auf dem Server gelöschte Dateien bleiben lokal erhalten.";
 "Choose courses" = "Kurse auswählen";
+"Refresh courses" = "Kurse aktualisieren";
+"No current courses found. You can refresh the list." = "Keine aktuellen Kurse gefunden. Du kannst die Liste aktualisieren.";
+"No selected courses are currently available. Check your course selection in Settings." = "Keiner der ausgewählten Kurse ist aktuell verfügbar. Prüfe deine Kursauswahl in den Einstellungen.";
 "Sign in to load your current courses." = "Melde dich an, um deine aktuellen Kurse zu laden.";
 "Select all" = "Alle auswählen";
 "Select none" = "Keine auswählen";
@@ -38,6 +41,8 @@
 "Sign-in required" = "Anmeldung erforderlich";
 "Waiting for connection" = "Warten auf Verbindung";
 "Checking courses…" = "Kurse werden geprüft …";
+"Loading courses…" = "Kurse werden geladen …";
+"Settings need attention" = "Einstellungen konnten nicht gespeichert werden";
 "Up to date" = "Auf dem neuesten Stand";
 "Sync needs attention" = "Synchronisierung benötigt Aufmerksamkeit";
 "Cancelled" = "Abgebrochen";

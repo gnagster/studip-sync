@@ -18,6 +18,36 @@ private final class FixtureProtocol: URLProtocol, @unchecked Sendable {
     override func stopLoading() {}
 }
 
+private final class ExpiringSession: @unchecked Sendable {
+    private let lock = NSLock()
+    private var authenticated = false
+    private var rejectLogin = false
+    private var htmlExpiry = false
+    private var posts = 0
+    var loginCount: Int { lock.withLock { posts } }
+    func expire(asHTML: Bool = false, rejectLogin: Bool = false) {
+        lock.withLock { authenticated = false; htmlExpiry = asHTML; self.rejectLogin = rejectLogin }
+    }
+    func respond(_ request: URLRequest) -> (Int, String, String) {
+        lock.withLock {
+            let form = #"<form action="/dispatch.php/login"><input name="loginname"><input name="password"></form>"#
+            if request.httpMethod == "POST" {
+                posts += 1; authenticated = !rejectLogin
+                return (200, "text/html", form)
+            }
+            if request.url!.path.isEmpty || request.url!.path == "/" { return (200, "text/html", form) }
+            guard authenticated else {
+                return htmlExpiry ? (200, "text/html", form) : (401, "application/json", "{}")
+            }
+            if request.url!.path.hasSuffix("users/me") { return (200, "application/json", #"{"data":{"id":"bb"}}"#) }
+            if request.url!.path.hasSuffix("/courses") {
+                return (200, "application/json", #"{"data":[{"id":"cc","attributes":{"title":"Course"}}]}"#)
+            }
+            return (200, "application/json", #"{"data":[]}"#)
+        }
+    }
+}
+
 @Suite(.serialized)
 struct ClientTests {
     private func client() -> StudIPClient {
@@ -60,6 +90,28 @@ struct ClientTests {
             return (200, "text/html", #"<form action="/dispatch.php/login"><input name="loginname"><input name="password"><input type="hidden" name="security_token" value="fixture"></form>"#)
         }
         await #expect(throws: StudSyncError.self) { try await client().signIn(username: "fixture", password: "not-real") }
+    }
+    @Test(arguments: [false, true]) func expiredSessionSignsInOnceAndResumesCourseRequest(_ asHTML: Bool) async throws {
+        let fixture = ExpiringSession()
+        FixtureProtocol.handler = { fixture.respond($0) }
+        let client = client()
+        try await client.signIn(username: "fixture", password: "not-real")
+        fixture.expire(asHTML: asHTML)
+        let courses = try await client.courses()
+        #expect(courses.map(\.id) == ["cc"])
+        #expect(fixture.loginCount == 2)
+    }
+    @Test func rejectedReauthenticationStopsRatherThanRepeatingPasswordAttempts() async throws {
+        let fixture = ExpiringSession()
+        FixtureProtocol.handler = { fixture.respond($0) }
+        let client = client()
+        try await client.signIn(username: "fixture", password: "not-real")
+        fixture.expire(rejectLogin: true)
+        for _ in 0..<2 {
+            do { _ = try await client.courses(); Issue.record("Rejected credentials must require sign-in") }
+            catch StudSyncError.authentication { }
+        }
+        #expect(fixture.loginCount == 2)
     }
     @Test func reconnectReusesVerifiedSessionAfterTransientCourseFailure() async throws {
         FixtureProtocol.handler = { request in
