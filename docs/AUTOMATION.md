@@ -8,6 +8,8 @@ The developer follows the roadmap, verifies changes, and creates/updates PRs onl
 
 There is no additional local reviewer, Codex Security deployment, custom status publisher, or merge workflow. CodeQL and Dependabot are conventional GitHub services, not OpenAI API jobs.
 
+Use the versioned Python/Swift CodeQL workflow (advanced setup). GitHub's Python-only default setup was switched off because it rejects uploads from the versioned workflow. Master requires the standard Python tests, native tests/app build, and both CodeQL jobs; no custom review status is introduced. Python tests run on macOS because the reference security suite checks macOS ACL removal.
+
 ## Platform boundary
 
 Repository instructions do not grant tools or permissions to a hosted review integration. Codex Automatic review is documented as posting review feedback; arbitrary editing/pushing/merging during automatic review is not a verified capability here. If the reviewer cannot follow the repair or merge instructions, the PR stays open and the owner receives the limitation. Formal self-approval is not possible when development and review use the same GitHub account.
