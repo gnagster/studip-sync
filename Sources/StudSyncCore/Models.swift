@@ -58,10 +58,14 @@ public enum SafePath {
         // Reserve brackets for identity markers so remote names cannot impersonate them.
         let name = try component(name).replacingOccurrences(of: "%", with: "%25")
             .replacingOccurrences(of: "[", with: "%5B").replacingOccurrences(of: "]", with: "%5D")
+        return try suffixedComponent(name, suffix: " [\(isFile ? "file" : "folder")-\(id)]", isFile: isFile)
+    }
+
+    static func suffixedComponent(_ name: String, suffix: String, isFile: Bool) throws -> String {
+        let name = try component(name)
         let ext = isFile ? (name as NSString).pathExtension : ""
         let ending = ext.isEmpty ? "" : "." + ext
         let stem = ending.isEmpty ? name : String(name.dropLast(ending.count))
-        let suffix = " [\(isFile ? "file" : "folder")-\(id)]"
         var budget = 255 - suffix.utf8.count - ending.utf8.count
         guard budget > 0 else { throw StudSyncError.unsafePath }
         var prefix = ""

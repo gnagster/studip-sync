@@ -155,7 +155,7 @@ final class AppStore {
         }
     }
     func runScheduledSync() {
-        if reconnectPending { connect() } else { sync() }
+        if signedIn { sync() } else if reconnectPending { connect() }
     }
     func setPaused(_ value: Bool) { paused = value; schedule() }
     func setLaunchAtLogin(_ value: Bool) {
@@ -191,6 +191,7 @@ final class AppStore {
                 try await client.adopt(cookies: cookies)
                 courses = try await client.courses()
                 signedIn = true; showWebLogin = false; status = "Ready"; message = nil
+                reconnectPending = false
                 if !preferences.setupComplete { preferences.selectedCourses = Set(courses.map(\.id)) }
                 schedule()
             } catch { message = "Finish signing into Stud.IP, then click Continue." }

@@ -55,9 +55,9 @@ public actor SyncEngine {
         let conflict = existingHash != nil && (old?.baselineHash == nil || old?.baselineHash != existingHash)
         var destination = target
         if conflict {
-            let stem = target.deletingPathExtension().lastPathComponent
-            let ext = target.pathExtension.isEmpty ? "" : "." + target.pathExtension
-            destination = target.deletingLastPathComponent().appendingPathComponent("\(stem) (StudIP \(UUID().uuidString.prefix(8)))\(ext)")
+            let name = try SafePath.suffixedComponent(target.lastPathComponent,
+                suffix: " (StudIP \(UUID().uuidString.prefix(8)))", isFile: true)
+            destination = target.deletingLastPathComponent().appendingPathComponent(name)
         }
         try manager.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
         // Validate again after creating directories; remote names may traverse existing symlinks.
@@ -65,7 +65,7 @@ public actor SyncEngine {
         let staging = destination.deletingLastPathComponent().appendingPathComponent(".studsync-\(UUID().uuidString).part")
         defer { try? manager.removeItem(at: staging) }
         try manager.copyItem(at: downloaded, to: staging)
-        if manager.fileExists(atPath: destination.path) {
+        if !conflict && manager.fileExists(atPath: destination.path) {
             _ = try manager.replaceItemAt(destination, withItemAt: staging)
         } else { try manager.moveItem(at: staging, to: destination) }
         records[key] = Record(revision: file.revision,

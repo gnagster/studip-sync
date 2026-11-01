@@ -89,6 +89,25 @@ private struct Scratch {
     #expect(try String(contentsOf: target, encoding: .utf8) == "same")
 }
 
+@Test func longNamesLeaveRoomForIncomingConflictCopies() async throws {
+    let scratch = try Scratch(); defer { scratch.remove() }
+    let root = scratch.root.appendingPathComponent("sync")
+    let name = try SafePath.remoteComponent(String(repeating: "a", count: 220) + ".pdf", id: String(repeating: "a", count: 32), isFile: true)
+    #expect(name.utf8.count == 255)
+    let engine = try SyncEngine(manifest: scratch.root.appendingPathComponent("manifest.json"))
+    var file = RemoteFile(id: "aa", components: [name], size: 4, revision: "1")
+    _ = try await engine.synchronize(file, courseID: "bb", root: root) { try scratch.download("same") }
+    let target = root.appendingPathComponent(name)
+    try Data("user".utf8).write(to: target)
+    file.revision = "2"
+    let change = try #require(await engine.synchronize(file, courseID: "bb", root: root) { try scratch.download("next") })
+    #expect(change.conflict)
+    #expect(change.name.utf8.count <= 255)
+    #expect(change.name.hasSuffix(".pdf"))
+    #expect(try String(contentsOf: target, encoding: .utf8) == "user")
+    #expect(try String(contentsOf: URL(fileURLWithPath: change.path), encoding: .utf8) == "next")
+}
+
 @Test func untouchedFilesReplaceWithoutBackupsAndSkipUnchanged() async throws {
     let scratch = try Scratch(); defer { scratch.remove() }
     let root = scratch.root.appendingPathComponent("sync")
