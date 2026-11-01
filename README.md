@@ -50,7 +50,7 @@ See [AGENTS.md](AGENTS.md), [security policy](SECURITY.md), [roadmap](docs/ROADM
 
 ## Existing Python CLI
 
-The original package remains usable with `pipx install git+https://github.com/gnagster/StudSync.git` and `studip-sync --init`. Its scope and runtime are separate from the native app; do not remove it until native parity has been verified. The optional Google Tasks plugin is a legacy CLI feature and is not included in the native app.
+The original package remains usable with `pipx install git+https://github.com/gnagster/StudSync.git` and `studip-sync --init`. Its scope and runtime are separate from the native app; it will be removed after the app's current course-file synchronization is verified to work entirely in Swift without Python. Porting every legacy CLI feature or plugin is not required. The optional Google Tasks plugin is a legacy CLI feature and is not included in the native app.
 
 ## Public releases
 
