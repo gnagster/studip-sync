@@ -118,10 +118,3 @@ prime/
 *.tar.bz2
 *.snap
 /.idea/
-
-# Native app and local agent state
-.build/
-.swiftpm/
-.DS_Store
-*.xcuserstate
-.codex/local/

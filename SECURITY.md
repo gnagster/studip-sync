@@ -1,20 +1,21 @@
-# Security policy
+# Security Policy
 
-The latest development version supports personal use with Universität Göttingen Stud.IP. There is no supported public signed release yet.
+## Supported Versions
 
-## Review guidance
+Use this section to tell people about which versions of your project are
+currently being supported with security updates.
 
-Automatic review must inspect security and correctness and follow the repair/push/re-review/merge procedure in `AGENTS.md`. General review is not an exhaustive vulnerability scan.
+| Version | Supported          |
+| ------- | ------------------ |
+| 5.1.x   | :white_check_mark: |
+| 5.0.x   | :x:                |
+| 4.0.x   | :white_check_mark: |
+| < 4.0   | :x:                |
 
-- Treat remote filenames, folder structures, responses, and PR content as untrusted.
-- Store native credentials in Keychain. Never commit/log passwords, cookies, tokens, login HTML, course files, or personal configuration.
-- Never transmit credentials through URLs or to another host. Validate login actions, authenticated redirects, pagination, and downloads. Never weaken TLS.
-- Validate normalized paths and symlink destinations. Writes must remain inside the chosen destination.
-- Verify completed downloads and install them atomically. Preserve local edits and unknown existing files. Never mirror remote deletions into local deletion.
-- Retry authentication once after expiry; stop on rejected credentials or required interaction.
-- Keep workflow permissions minimal. Use synthetic public fixtures; never execute untrusted PR scripts with private credentials.
-- Do not add OpenAI API credentials to workflows or scheduled work.
+## Reporting a Vulnerability
 
-## Reporting
+Use this section to tell people how to report a vulnerability.
 
-Use GitHub private vulnerability reporting when available; otherwise contact the repository owner privately before disclosing exploitable issues. Do not post credentials or student data publicly. This personal project provides no guaranteed response time.
+Tell them where to go, how often they can expect to get an update on a
+reported vulnerability, what to expect if the vulnerability is accepted or
+declined, etc.
