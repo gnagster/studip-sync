@@ -51,6 +51,32 @@ public struct Preferences: Codable, Sendable {
 }
 
 public enum SafePath {
+    public static func remoteComponent(_ name: String, id: String, isFile: Bool) throws -> String {
+        guard !id.isEmpty, id.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) }) else {
+            throw StudSyncError.unsafePath
+        }
+        // Reserve brackets for identity markers so remote names cannot impersonate them.
+        let name = try component(name).replacingOccurrences(of: "%", with: "%25")
+            .replacingOccurrences(of: "[", with: "%5B").replacingOccurrences(of: "]", with: "%5D")
+        return try suffixedComponent(name, suffix: " [\(isFile ? "file" : "folder")-\(id)]", isFile: isFile)
+    }
+
+    static func suffixedComponent(_ name: String, suffix: String, isFile: Bool) throws -> String {
+        let name = try component(name)
+        let ext = isFile ? (name as NSString).pathExtension : ""
+        let ending = ext.isEmpty ? "" : "." + ext
+        let stem = ending.isEmpty ? name : String(name.dropLast(ending.count))
+        var budget = 255 - suffix.utf8.count - ending.utf8.count
+        guard budget > 0 else { throw StudSyncError.unsafePath }
+        var prefix = ""
+        for character in stem {
+            let count = String(character).utf8.count
+            if count > budget { break }
+            prefix.append(character); budget -= count
+        }
+        return prefix + suffix + ending
+    }
+
     public static func component(_ name: String) throws -> String {
         let value = name.precomposedStringWithCompatibilityMapping
             .replacingOccurrences(of: "/", with: "--")

@@ -15,3 +15,5 @@ Use the versioned Python/Swift CodeQL workflow (advanced setup). GitHub's Python
 Repository instructions do not grant tools or permissions to a hosted review integration. Codex Automatic review is documented as posting review feedback; arbitrary editing/pushing/merging during automatic review is not a verified capability here. If the reviewer cannot follow the repair or merge instructions, the PR stays open and the owner receives the limitation. Formal self-approval is not possible when development and review use the same GitHub account.
 
 Required CI blocks broken builds, but does not itself prove a Codex review occurred. The reviewer must follow the latest-head rule in AGENTS.md. Enabling repository auto-merge alone does not implement this review loop.
+
+Master also requires resolved review conversations. Do not enable GitHub auto-merge before the latest commit has a clean review: CI can pass while review is still running, before a new finding creates a conversation.

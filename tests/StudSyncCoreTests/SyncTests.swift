@@ -24,6 +24,90 @@ private struct Scratch {
     #expect(throws: StudSyncError.self) { try SafePath.destination(root: scratch.root, components: ["escape", "file"]) }
 }
 
+@Test func remoteNamesKeepDistinctIdentitiesAndExtensions() throws {
+    let names = ["①.pdf", "1.pdf", "a/b.pdf", "a--b.pdf", "NOTES.pdf", "notes.pdf"]
+    let components = try names.enumerated().map {
+        try SafePath.remoteComponent($0.element, id: String($0.offset, radix: 16), isFile: true)
+    }
+    #expect(Set(components.map { $0.lowercased() }).count == names.count)
+    #expect(components.allSatisfy { $0.hasSuffix(".pdf") })
+    #expect(try SafePath.remoteComponent("Notes", id: "aa", isFile: false) != SafePath.remoteComponent("Notes", id: "aa", isFile: true))
+    #expect(try SafePath.remoteComponent("foo. [folder-bb]", id: "aa", isFile: true) != SafePath.remoteComponent("foo [file-aa].", id: "bb", isFile: false))
+    let long = try SafePath.remoteComponent(String(repeating: "ü", count: 200) + ".pdf", id: "aa", isFile: true)
+    #expect(long.utf8.count <= 255)
+    #expect(long.hasSuffix(" [file-aa].pdf"))
+    #expect(throws: StudSyncError.self) { try SafePath.remoteComponent("file", id: "../bad", isFile: true) }
+    #expect(throws: StudSyncError.self) { try SafePath.remoteComponent("．．", id: "aa", isFile: false) }
+}
+
+@Test func normalizedRemoteFilesNeverShareTheirBaselines() async throws {
+    let scratch = try Scratch(); defer { scratch.remove() }
+    let root = scratch.root.appendingPathComponent("sync")
+    let engine = try SyncEngine(manifest: scratch.root.appendingPathComponent("manifest.json"))
+    var first = RemoteFile(id: "aa", components: [try SafePath.remoteComponent("①.pdf", id: "aa", isFile: true)], size: 4, revision: "1")
+    let second = RemoteFile(id: "bb", components: [try SafePath.remoteComponent("1.pdf", id: "bb", isFile: true)], size: 4, revision: "1")
+    for file in [first, second] {
+        _ = try await engine.synchronize(file, courseID: "cc", root: root) { try scratch.download("same") }
+    }
+    first.revision = "2"
+    _ = try await engine.synchronize(first, courseID: "cc", root: root) { try scratch.download("next") }
+    let skipped = try await engine.synchronize(second, courseID: "cc", root: root) { throw URLError(.badURL) }
+    #expect(skipped == nil)
+    #expect(try String(contentsOf: root.appendingPathComponent(first.components[0]), encoding: .utf8) == "next")
+    #expect(try String(contentsOf: root.appendingPathComponent(second.components[0]), encoding: .utf8) == "same")
+}
+
+@Test func renamedDestinationCannotReuseAnotherPathsBaselineOrSkipIt() async throws {
+    for (revision, existing, incoming) in [("1", "user", "same"), ("2", "same", "next")] {
+        let scratch = try Scratch(); defer { scratch.remove() }
+        let engine = try SyncEngine(manifest: scratch.root.appendingPathComponent("manifest.json"))
+        var remote = RemoteFile(id: "aa", components: ["old.pdf"], size: 4, revision: "1")
+        _ = try await engine.synchronize(remote, courseID: "bb", root: scratch.root) { try scratch.download("same") }
+        let target = scratch.root.appendingPathComponent("new.pdf")
+        try Data(existing.utf8).write(to: target)
+        remote.components = ["new.pdf"]; remote.revision = revision
+        let change = try await engine.synchronize(remote, courseID: "bb", root: scratch.root) { try scratch.download(incoming) }
+        #expect(change?.conflict == true)
+        #expect(try String(contentsOf: target, encoding: .utf8) == existing)
+        #expect(try String(contentsOf: scratch.root.appendingPathComponent("old.pdf"), encoding: .utf8) == "same")
+        #expect(try String(contentsOf: URL(fileURLWithPath: #require(change).path), encoding: .utf8) == incoming)
+    }
+}
+
+@Test func prototypeManifestDoesNotAuthorizeReplacingAnUnknownDestination() async throws {
+    let scratch = try Scratch(); defer { scratch.remove() }
+    let target = scratch.root.appendingPathComponent("notes.pdf")
+    try Data("same".utf8).write(to: target)
+    let manifest = scratch.root.appendingPathComponent("manifest.json")
+    let key = scratch.root.standardizedFileURL.resolvingSymlinksInPath().path + "/bb/aa"
+    let data = try JSONSerialization.data(withJSONObject: [key: ["revision": "1", "baselineHash": SyncEngine.hash(target)]])
+    try data.write(to: manifest)
+    let engine = try SyncEngine(manifest: manifest)
+    let remote = RemoteFile(id: "aa", components: ["notes.pdf"], size: 4, revision: "2")
+    let change = try await engine.synchronize(remote, courseID: "bb", root: scratch.root) { try scratch.download("next") }
+    #expect(change?.conflict == true)
+    #expect(try String(contentsOf: target, encoding: .utf8) == "same")
+}
+
+@Test func longNamesLeaveRoomForIncomingConflictCopies() async throws {
+    let scratch = try Scratch(); defer { scratch.remove() }
+    let root = scratch.root.appendingPathComponent("sync")
+    let name = try SafePath.remoteComponent(String(repeating: "a", count: 220) + ".pdf", id: String(repeating: "a", count: 32), isFile: true)
+    #expect(name.utf8.count == 255)
+    let engine = try SyncEngine(manifest: scratch.root.appendingPathComponent("manifest.json"))
+    var file = RemoteFile(id: "aa", components: [name], size: 4, revision: "1")
+    _ = try await engine.synchronize(file, courseID: "bb", root: root) { try scratch.download("same") }
+    let target = root.appendingPathComponent(name)
+    try Data("user".utf8).write(to: target)
+    file.revision = "2"
+    let change = try #require(await engine.synchronize(file, courseID: "bb", root: root) { try scratch.download("next") })
+    #expect(change.conflict)
+    #expect(change.name.utf8.count <= 255)
+    #expect(change.name.hasSuffix(".pdf"))
+    #expect(try String(contentsOf: target, encoding: .utf8) == "user")
+    #expect(try String(contentsOf: URL(fileURLWithPath: change.path), encoding: .utf8) == "next")
+}
+
 @Test func untouchedFilesReplaceWithoutBackupsAndSkipUnchanged() async throws {
     let scratch = try Scratch(); defer { scratch.remove() }
     let root = scratch.root.appendingPathComponent("sync")
