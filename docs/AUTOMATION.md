@@ -1,8 +1,6 @@
 # Development and review
 
-One local Codex project automation starts November 1, 2026 at 20:15 Europe/Berlin and repeats every five hours. The Mac must be awake with the Codex app running. A five-hour interval is not a promise of five hours of continuous work. Subscription limits pause work; never fall back to an OpenAI API key.
-
-Setup status: the timezone-anchored automation was prepared as a Codex confirmation card. It is not confirmed active until that card is saved; no alternate scheduler was installed.
+Development runs are started manually by the owner. The proposed five-hour schedule was never saved, and the owner explicitly instructed that it must not be created. Never add a replacement scheduler. Subscription limits stop work; never fall back to an OpenAI API key.
 
 The developer follows the roadmap, verifies changes, and creates/updates PRs only. The existing Codex Automatic review integration is configured by the owner to review every push. AGENTS.md authorizes the reviewer to fix all actionable findings, test, push, and let the next review examine that new SHA. Only the reviewer is authorized to merge a clean current head after required CI passes.
 

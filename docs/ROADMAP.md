@@ -2,11 +2,11 @@
 
 ## Operating plan
 
-Build native Swift, retaining Python as a reference until native parity is proven. One Codex project schedule runs every five hours, anchored at November 1, 2026, 20:15 Europe/Berlin. Development creates/updates PRs only. Existing automatic review on every push follows `AGENTS.md`: repair, test, push, re-review, then merge a clean current revision when the integration supports those actions. No separate reviewer, security scheduler, merge bot, or OpenAI API usage.
+Build native Swift, retaining Python as a reference until native parity is proven. Development runs are manual; the owner explicitly instructed that no development schedule be created. Development creates/updates PRs only. Existing automatic review on every push follows `AGENTS.md`: repair, test, push, re-review, then merge a clean current revision when the integration supports those actions. No separate reviewer, security scheduler, merge bot, or OpenAI API usage.
 
 ## Milestones
 
-- [ ] Foundation: complete instructions, CI, dependency updates, build/run action, and five-hour schedule. Establish whether automatic review has the requested write/merge capabilities; report platform blockers honestly.
+- [ ] Foundation: complete instructions, CI, dependency updates, build/run action, and manual development workflow. Establish whether automatic review has the requested write/merge capabilities; report platform blockers honestly.
 - [x] Core: authenticated JSON-API, selected courses, safe paths, atomic downloads, local-edit detection, and regression tests.
 - [x] Personal app implementation: Keychain setup, menu-bar stats/recent changes, settings, cancellation, background sync, Finder actions, optional Start at Login. Complete the acceptance checks below before calling this a finished release.
 - [ ] Acceptance: builds/tests, reference CLI tests, fresh setup, interrupted/offline recovery, session expiry, local edits, and unchanged downloads. Profile idle CPU, memory, and wakeups. Unit tests do not prove live or visual acceptance.
