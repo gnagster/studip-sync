@@ -14,11 +14,22 @@ Build native Swift, retaining Python as a reference until native parity is prove
 
 ## Verified in the initial native implementation
 
-November 1, 2026: 16 reference Python tests, twelve synthetic native tests, and an opt-in live Göttingen login/course/file/download check passed. A release app was installed in `~/Applications`, its signature verified, and the German first-run window inspected. Native tests cover path traversal/symlinks, pagination, rejected login, HTML attachment/session distinction, unavailable course areas, duplicate course titles, edited-file preservation, atomic updates, cancellation, and incorrect download sizes. Full interactive setup, automatic session renewal, Start at Login, offline recovery, accessibility, and battery profiling remain acceptance work. The exact five-hour start was prepared as an automation card and still requires confirmation in Codex. The first hosted review posted findings without implementing or pushing fixes; the local development session addressed them. Automatic repair and merge remain unverified platform capabilities.
+November 1, 2026: the initial native implementation passed synthetic tests and an opt-in live Göttingen login/course/file/download check. A release app was installed in `~/Applications`, its signature verified, and the German first-run window inspected. Native tests cover path traversal/symlinks, pagination, rejected login, HTML attachment/session distinction, unavailable course areas, duplicate course titles, edited-file preservation, atomic updates, cancellation, and incorrect download sizes. No development schedule was saved; the owner subsequently instructed that none be created. Hosted reviews posted findings without implementing or pushing fixes; local development addressed them. Automatic repair and merge remain unverified platform capabilities.
 
 ## Recovery after PR #3
 
-The initial native PR was merged before its last two findings were addressed. Revert PR #6 remains open and has not changed master. The follow-up fixes add scheduled offline-startup recovery and stable file/folder identity markers to avoid normalized-path collisions, with regressions that do not access personal credentials. Master now requires resolved review conversations; queued auto-merge is still prohibited until the current commit has a clean review. Files at the prototype's older paths are preserved when the new naming scheme is used.
+The initial native PR was merged before its last two findings were addressed. Follow-up PR #11 repaired the findings; obsolete revert PR #6 was closed without merging. PR #12 consolidated dependency updates. The fixes add scheduled offline-startup recovery and stable file/folder identity markers to avoid normalized-path collisions, with regressions that do not access personal credentials. Master requires resolved review conversations; queued auto-merge is still prohibited until the current commit has a clean review. Files at the prototype's older paths are preserved when the new naming scheme is used.
+
+## Current acceptance increment (PR #13)
+
+- [x] Synthetic first-run sign-in, course/folder selection, settings reload, private file permissions, and failure to save settings. Tests inject credential storage and never access personal Keychain items.
+- [x] Refresh enrollment without losing selections; refresh before syncing and report when selected courses are no longer available.
+- [x] Synthetic expired sessions (401 and login HTML): reauthenticate once; stop after rejected credentials.
+- [x] Resume configured automatic sync on offline-to-online transitions, including a transition during a failing request. Preserve manual/pause choices and stop retries after rejected credentials.
+- [x] Keep both required CodeQL jobs; skip Swift extraction only for known unrelated PR changes, and verify source-archive coverage on full scans. A package pre-resolution experiment did not improve measured runtime and was removed.
+- [ ] Complete interactive setup and reconnect with the university, including interrupted downloads and Start at Login. Verify network recovery after sleep on a real Mac.
+- [ ] Inspect German/English layout, keyboard navigation, VoiceOver, and light/dark appearance. No computer-use validation is authorized in this development session.
+- [ ] Profile idle CPU, memory, wakeups, and battery impact before calling acceptance complete.
 
 ## Defaults
 

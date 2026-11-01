@@ -39,7 +39,7 @@ struct StatusPanel: View {
             HStack {
                 Button(L(store.isBusy ? "Cancel" : "Sync now")) {
                     if store.isBusy { store.cancel() } else { store.sync() }
-                }.buttonStyle(.borderedProminent).disabled(!store.signedIn || !store.preferences.setupComplete || store.paused)
+                }.buttonStyle(.borderedProminent).disabled(!store.isBusy && !store.canSync)
                 Button(L(store.paused ? "Resume" : "Pause")) { store.setPaused(!store.paused) }.disabled(store.isBusy)
                 Spacer()
                 Button { store.reveal() } label: { Image(systemName: "folder") }.help(L("Open in Finder")).disabled(store.preferences.destination.isEmpty)
@@ -96,8 +96,8 @@ struct SetupView: View {
                 GroupBox {
                     VStack(alignment: .leading, spacing: 12) {
                         heading("1", "Connect your university", done: store.signedIn)
-                        TextField(L("Username (without email suffix)"), text: $store.username).textContentType(.username)
-                        SecureField(L("Password"), text: $store.password).textContentType(.password)
+                        TextField(L("Username (without email suffix)"), text: $store.username).textContentType(.username).disabled(store.isBusy)
+                        SecureField(L("Password"), text: $store.password).textContentType(.password).disabled(store.isBusy)
                         HStack {
                             Button(L("Sign in")) { store.connect() }
                                 .buttonStyle(.borderedProminent).disabled(store.username.isEmpty || store.password.isEmpty || store.isBusy)
@@ -128,17 +128,18 @@ struct SetupView: View {
                 GroupBox {
                     VStack(alignment: .leading, spacing: 10) {
                         heading("3", "Choose courses", done: !store.preferences.selectedCourses.isEmpty)
+                        Button(L("Refresh courses")) { store.refreshCourses() }
+                            .font(.caption).disabled(!store.signedIn || store.isBusy)
                         if store.courses.isEmpty {
-                            Text(L("Sign in to load your current courses.")).foregroundStyle(.secondary)
+                            Text(L(store.signedIn ? "No current courses found. You can refresh the list." : "Sign in to load your current courses.")).foregroundStyle(.secondary)
                         } else {
                             HStack {
-                                Button(L("Select all")) { store.preferences.selectedCourses = Set(store.courses.map(\.id)); store.save() }
-                                Button(L("Select none")) { store.preferences.selectedCourses = []; store.save() }
+                                Button(L("Select all")) { store.preferences.selectedCourses = Set(store.courses.map(\.id)) }
+                                Button(L("Select none")) { store.preferences.selectedCourses = [] }
                             }.font(.caption).disabled(store.isBusy)
                             ForEach(store.courses) { course in
                                 Toggle(course.title, isOn: Binding(get: { store.preferences.selectedCourses.contains(course.id) }, set: { value in
                                     if value { store.preferences.selectedCourses.insert(course.id) } else { store.preferences.selectedCourses.remove(course.id) }
-                                    store.save()
                                 })).disabled(store.isBusy)
                             }
                         }
@@ -167,6 +168,7 @@ struct SetupView: View {
             }.padding(26)
         }
         .onChange(of: store.preferences.intervalMinutes) { store.save(); store.schedule() }
+        .onChange(of: store.preferences.selectedCourses) { store.save(); store.schedule() }
         .sheet(isPresented: $store.showWebLogin) { WebLogin(store: store) }
     }
     private func heading(_ number: String, _ title: String, done: Bool) -> some View {

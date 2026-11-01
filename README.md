@@ -26,7 +26,7 @@ Untouched files are updated atomically without retaining old copies. Locally edi
 
 Remote files and folders include stable Stud.IP ID markers in their names, so Unicode normalization, case differences, duplicate names, and replaced separators cannot combine separate resources. File extensions are retained; excessively long stems are shortened. Upgrading from the initial native prototype creates these new paths and preserves files at the old paths rather than deleting or moving them.
 
-If startup is offline, configured automatic sync retries the connection at the selected interval. Paused/manual sync does not retry automatically, and rejected credentials require your attention.
+If startup or sync fails offline, configured automatic sync retries when the network returns and at the selected interval. Paused/manual sync does not retry automatically, and rejected credentials require your attention. Each sync refreshes enrolled courses; Settings also offers Refresh courses without changing your selection. If none of your selected courses remain available, choose courses again rather than receiving a false “Up to date” result.
 
 ## Verification
 
@@ -37,6 +37,8 @@ python3 -m venv .venv
 ```
 
 Verification runs legacy Python tests (including optional Google Tasks security tests), native Swift tests, a release app build, and whitespace validation. CI runs native and reference tests plus CodeQL. Fixtures are synthetic and do not require university credentials.
+
+Swift CodeQL runs for native/build changes and all master/weekly scans. PRs containing only known documentation or Python CLI changes keep the required Swift job but skip extraction; Python scanning still runs. Full Swift scans check that every first-party Swift source appears in the extraction archive. Resolving packages before tracing was measured at 15m57s versus an earlier 14m22s run, so that experiment was removed rather than claiming a speedup. Native PRs can still spend about 15–22 minutes in Swift CodeQL on hosted runners.
 
 An optional live check is available with `STUDSYNC_LIVE_TEST=1 swift test --filter liveGoettingenReadOnlyCheck`. It reads the existing CLI credentials locally, signs into Göttingen, and verifies a small course-file download in a temporary location. It never runs in CI and does not change the sync destination or university files.
 
