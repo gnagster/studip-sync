@@ -1,5 +1,7 @@
 # StudSync
 
+<img src="Sources/StudSyncApp/Resources/ClassicFold.png" alt="StudSync Classic Fold logo" width="128">
+
 A native macOS menu-bar app that brings Universität Göttingen Stud.IP course files into ordinary Finder folders. Personal Apple Silicon use comes first; macOS 15 or later is required. The Python CLI is retained as a regression-tested reference during migration.
 
 ## Build and run
