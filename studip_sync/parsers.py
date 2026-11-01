@@ -163,6 +163,8 @@ def extract_courses(html, only_recent_semester):
             save_as = course["name"].strip()
             save_as = re.sub(r"\s\s+", " ", save_as)
             save_as = save_as.replace("/", "--")
+            if save_as in ('', '.', '..'):
+                raise ParserError('Invalid course directory name')
 
             yield {
                 "course_id": course_id,

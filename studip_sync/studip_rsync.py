@@ -167,11 +167,12 @@ def check_and_cleanup_form_data(form_data_files, form_data_folders, use_api):
             if not all(c in string.hexdigits for c in form_id):
                 raise ValueError("id is not hexadecimal")
 
-            if form_data['name'] in ('', '.', '..'):
+            name = unicodedata.normalize(UNICODE_NORMALIZE_MODE, form_data["name"]).replace("/", "--")
+            if name in ('', '.', '..'):
                 raise ValueError('Invalid folder name')
 
             form_data_folders_new.append({
-                "name": unicodedata.normalize(UNICODE_NORMALIZE_MODE, form_data["name"]).replace("/", "--"),
+                "name": name,
                 "id": form_id
             })
         except Exception as e:

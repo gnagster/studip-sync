@@ -4,7 +4,7 @@ import os.path
 import subprocess
 from datetime import timedelta
 
-from studip_sync.helpers import JSONConfig, ConfigError
+from studip_sync.helpers import JSONConfig, ConfigError, open_private_file
 from studip_sync.plugins import PluginBase
 import pickle
 
@@ -90,7 +90,7 @@ class Plugin(PluginBase):
         # time.
 
         if os.path.exists(self.token_pickle_path):
-            with open(self.token_pickle_path, 'rb') as token:
+            with open_private_file(self.token_pickle_path, 'rb') as token:
                 credentials = pickle.load(token)
         # If there are no (valid) credentials available, let the user log in.
         if not credentials or not credentials.valid:
@@ -104,7 +104,7 @@ class Plugin(PluginBase):
                     self.credentials_path, SCOPES)
                 credentials = flow.run_local_server(port=0)
             # Save the credentials for the next run
-            with open(self.token_pickle_path, 'wb') as token:
+            with open_private_file(self.token_pickle_path, 'wb') as token:
                 pickle.dump(credentials, token)
 
         service = build('tasks', 'v1', credentials=credentials)
@@ -137,7 +137,7 @@ class Plugin(PluginBase):
         credentials = None
 
         if os.path.exists(self.token_pickle_path):
-            with open(self.token_pickle_path, 'rb') as token:
+            with open_private_file(self.token_pickle_path, 'rb') as token:
                 credentials = pickle.load(token)
 
         if not credentials or not credentials.valid:
