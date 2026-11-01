@@ -3,9 +3,11 @@ import AppKit
 import WebKit
 import StudSyncCore
 
+let appResourceBundle = Bundle.main.resourceURL
+    .flatMap { Bundle(url: $0.appendingPathComponent("StudSync_StudSyncApp.bundle")) } ?? .module
+
 func L(_ key: String) -> String {
-    let bundled = Bundle.main.resourceURL.flatMap { Bundle(url: $0.appendingPathComponent("StudSync_StudSyncApp.bundle")) }
-    return NSLocalizedString(key, bundle: bundled ?? .module, comment: "")
+    NSLocalizedString(key, bundle: appResourceBundle, comment: "")
 }
 
 struct StatusPanel: View {
@@ -13,7 +15,8 @@ struct StatusPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 10) {
-                Image(systemName: "folder.badge.arrow.down").font(.title2).foregroundStyle(.tint)
+                Image("ClassicFold", bundle: appResourceBundle)
+                    .resizable().scaledToFit().frame(width: 32, height: 32).accessibilityHidden(true)
                 VStack(alignment: .leading) {
                     Text("StudSync").font(.headline)
                     Text(L(store.paused ? "Paused" : store.status)).font(.caption).foregroundStyle(.secondary).lineLimit(2)
@@ -87,7 +90,8 @@ struct SetupView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 HStack(spacing: 14) {
-                    Image(systemName: "folder.badge.arrow.down").font(.system(size: 42)).foregroundStyle(.tint)
+                    Image("ClassicFold", bundle: appResourceBundle)
+                        .resizable().scaledToFit().frame(width: 56, height: 56).accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(store.preferences.setupComplete ? L("Your courses, in Finder.") : L("Welcome to StudSync")).font(.largeTitle.bold())
                         Text(L("Universität Göttingen · Stud.IP")).foregroundStyle(.secondary)
