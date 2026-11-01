@@ -1,126 +1,47 @@
-# studip-sync
+# StudSync
 
-[![studip-sync](https://snapcraft.io/studip-sync/badge.svg)](https://snapcraft.io/studip-sync)
+A native macOS menu-bar app that brings Universität Göttingen Stud.IP course files into ordinary Finder folders. Personal Apple Silicon use comes first; macOS 15 or later is required. The Python CLI is retained as a regression-tested reference during migration.
 
-Download and synchronize files and media from Stud.IP -- the campus management platform deployed at several German universities.
+## Build and run
 
-Note that this project currently only supports the *University of Göttingen*, the *University of Passau* and *Trier University of Applied Sciences* but 
-could work at other universities with similar authentication methods.
+Install Xcode and select its developer directory, then:
 
-## Installation
-
-### Using pipx (recommended)
-Make sure you have [pipx](https://pipx.pypa.io) installed.
-Then run
-```shell
-pipx install git+https://github.com/studip-sync/studip-sync.git
+```sh
+./script/build_and_run.sh
 ```
 
-### From source
+The script resolves the pinned Swift package, builds a release app, stages `dist/StudSync.app`, signs it locally, and launches it. Codex's Run action uses the same command. `--build` only packages the app; `--verify` launches it and verifies the process. `--logs`, `--telemetry`, and `--debug` support local diagnostics. Open `Package.swift` in Xcode for native editing/debugging.
 
-1. `git clone https://github.com/studip-sync/studip-sync`
-2. Install all needed dependencies
-3. Then run `./studip_sync.py -d /path/to/files -m /path/to/media` to sync files to `/path/to/files` and media to `/path/to/media`. (see Usage)
+This is an ad-hoc-signed personal build, not a notarized public distribution. No Python installation is needed to run the native app. Keep the built app at a stable location before enabling Start at Login.
 
-To create a permanent configuration:
+## First launch
 
-1. Run `./studip_sync.py --init` (see Configuration)
-2. Schedule a cron job or manually run `./studip_sync.py` to sync your data.
+Sign in with your university username (without the email suffix), choose a destination, select courses, and start syncing. Credentials are saved in macOS Keychain. The university web login is available for interactive/SSO sign-in; imported web sessions remain valid only as long as the university permits them. Settings and sync history live under `~/Library/Application Support/StudSync/`.
 
-### As a snap package
+The optional CLI import reads `~/.config/studip-sync/config.json` only after you click Import; it does not change that file. Existing files without a known baseline are preserved unless their content matches the server.
 
-1. If not yet installed, [install snapd](https://docs.snapcraft.io/core/install)
-2. `sudo snap install --beta studip-sync`
-3. `sudo snap connect studip-sync:home`
+StudSync runs in the menu bar after its window closes. It defaults to hourly sync and offers manual, 15-minute, and four-hour intervals. It does not keep your Mac awake. Closing the panel does not quit the app; Quit does. Current course files are supported; separate MediaCast/Opencast video-library synchronization is not yet part of the native client.
 
-**Important Note**: If you install studip-sync as a snap, you cannot use `~` to reference your home directory in the
-config file. If you ignore this note, the files will be synced to `snap/studip-sync/current/...`
+Untouched files are updated atomically without retaining old copies. Locally edited files remain intact, with incoming server versions saved beside them. Remote deletion never deletes your local files. Use the menu-bar panel to see changes and reveal files in Finder.
 
-**Limitation**: The snap can only write to non-hidden directories in you home directory. If you omit Step 3, it cannot
-write to your home directory at all.
+## Verification
 
-### On Arch Linux (AUR)
-Install [studip-sync-git](https://aur.archlinux.org/packages/studip-sync-git/) from the AUR.
-
-## Configuration
-
-To create a new configuration file execute:
-
-```shell
-./studip_sync.py --init
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -e ".[google-tasks]"
+./script/verify.sh
 ```
 
-### Example
+Verification runs legacy Python tests (including optional Google Tasks security tests), native Swift tests, a release app build, and whitespace validation. CI runs native and reference tests plus CodeQL. Fixtures are synthetic and do not require university credentials.
 
-```json
-{
-    "user": {
-        "login": "bob42",
-        "password": "password"
-    },
-    "files_destination": "/home/bob/Documents/Uni",
-    "media_destination": "/home/bob/Videos/Uni",
-    "base_url": "https://studip.uni-goettingen.de"
-}
+## Development
 
-```
+See [AGENTS.md](AGENTS.md), [security policy](SECURITY.md), [roadmap](docs/ROADMAP.md), and [automation notes](docs/AUTOMATION.md). Development uses the owner's ChatGPT subscription; no OpenAI API credentials or API-billed Codex Actions are used. Automatic code review is configured in Codex repository settings, not by workflow YAML.
 
-The `files_destination` and `media_destination` option are optional. If you omit one of them, the corresponding feature is disabled. You can also specify both options on the commandline. (Using `-d` implies automatically `--full` if no config is present)
-If you omit the `login` or `password`, studip-sync will ask for them interactively.
+## Existing Python CLI
 
-## Usage
+The original package remains usable with `pipx install git+https://github.com/gnagster/StudSync.git` and `studip-sync --init`. Its scope and runtime are separate from the native app; do not remove it until native parity has been verified. The optional Google Tasks plugin is a legacy CLI feature and is not included in the native app.
 
-### Full sync instead of incremental sync
+## Public releases
 
-studip-sync checks if new files have been edited since the last sync to limit the data which needs to be downloaded on every sync.
-If you don't want this to happen and prefer to always download all data, use:
-```shell
-./studip_sync.py --full
-```
-
-### Only sync the last semester
-
-To sync only the last semester and skip older courses, use the `--recent` flag. (This option will be ignored if `--full` is supplied).
-```shell
-./studip_sync.py --recent
-```
-
-### Running studip-sync manually
-```shell
-# Synchronizes files to /path/to/sync/dir
-# and uses a non-default location for the config file (here: ./config.json)
-./studip_sync.py -c ./ -d /path/to/sync/dir
-
-# Reads all parameters from ~/.config/studip-sync/config.json
-./studip_sync.py
-```
-
-### Automation using a cron job
-Run `crontab -e` and add the following lines:
-```
-# Run at 8:00, 13:00 and 19:00 every day.
-0 8,13,19 * * *  /path/to/studip-sync/studip_sync.py
-```
-
-
-## Plugin support
-
-studip-sync supports the feature to load plugins to enable more features.
-
-To enable a plugin run `studip-sync --enable-plugin PLUGIN` and to disable `studip-sync --disable-plugin PLUGIN`.
-To reconfigure a plugin run `studip-sync --reconfigure-plugin PLUGIN`.
-
-### Google Tasks API
-
-This plugin can add a new task on each successful media download into a list at Google Tasks. 
-
-To use this plugin you need to have a Google Cloud project with Tasks API enabled.
-Download the `credentials.json` from Google Cloud and place it at `.config/studip-sync/google-tasks/credentials.json`.
-Then run `studip-sync --enable-plugin google-tasks` and authenticate this plugin over OAuth with your Google account.
-Finally, enter the task list id of your specified task list. For this you need to create a task list at Google Tasks first.
-
-
-## History
-* **2020 - today**: [@lenke182](https://github.com/lenke182) has taken over development and maintenance of the project.
-* **2015 - 2019**: Developed and maintained by [@woefe](https://github.com/woefe). During that time studip-sync was compatible with Stud.IP deployed at University of Passau.
-
+Developer ID signing, notarization, signed updates, clean-machine installation testing, and wider hardware support are future milestones. See the roadmap; do not treat a local build or successful unit tests as proof that distribution or live university compatibility is complete.
