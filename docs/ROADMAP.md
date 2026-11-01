@@ -1,40 +1,37 @@
-# StudSync roadmap
+# StudSync developer roadmap
+
+This is the development agent's work queue. Keep it current in every PR, with implementation and verification evidence. Before starting work, check merged/open PRs and the code; continue existing work rather than implementing it again. Checked items describe implemented scope, not a guarantee that the app is a finished release. Identify open-PR work explicitly until it merges.
 
 ## Operating plan
 
-Build native Swift, retaining Python as a reference until native parity is proven. Development runs are manual; the owner explicitly instructed that no development schedule be created. Development creates/updates PRs only. Existing automatic review on every push follows `AGENTS.md`: repair, test, push, re-review, then merge a clean current revision when the integration supports those actions. No separate reviewer, security scheduler, merge bot, or OpenAI API usage.
+Develop native Swift for Universität Göttingen, retaining the Python reference until full functional parity is demonstrated. Development runs are manual; do not create a development schedule. Keep one development PR active. Development agents never approve or merge. The existing automatic reviewer follows `AGENTS.md`; no separate reviewer, security scheduler, custom status publisher, merge bot, or OpenAI API usage.
 
-## Milestones
+## Implemented milestones
 
-- [ ] Foundation: complete instructions, CI, dependency updates, build/run action, and manual development workflow. Establish whether automatic review has the requested write/merge capabilities; report platform blockers honestly.
-- [x] Core: authenticated JSON-API, selected courses, safe paths, atomic downloads, local-edit detection, and regression tests.
-- [x] Personal app implementation: Keychain setup, menu-bar stats/recent changes, settings, cancellation, background sync, Finder actions, optional Start at Login. Complete the acceptance checks below before calling this a finished release.
-- [ ] Acceptance: builds/tests, reference CLI tests, fresh setup, interrupted/offline recovery, session expiry, local edits, and unchanged downloads. Profile idle CPU, memory, and wakeups. Unit tests do not prove live or visual acceptance.
-- [ ] Polish: German/English text, VoiceOver, light/dark appearance, icon, user onboarding feedback, and live university checks.
+- [x] Foundation: agent/security instructions, CI, Dependabot, build/run and verification actions, and manual development workflow. Hosted review posts feedback; its requested repair/push/merge capabilities remain unverified and are documented in `docs/AUTOMATION.md`, rather than blocking this milestone.
+- [x] Core: authenticated JSON-API, selected courses, safe paths, atomic downloads, local-edit preservation, and regression tests. PR #11 repaired the initial native findings; obsolete revert PR #6 was closed without merging. PR #12 consolidated dependency updates.
+- [x] Personal app: Keychain setup, menu-bar stats/recent changes, settings, cancellation, background sync, Finder actions, and optional Start at Login.
+- [x] Logo: Classic Fold logo, bundled app icon, setup/header branding, and README image are implemented in open PR #13. Do not recreate these assets; use their existing colors and resources for UI work.
+- [x] Setup and recovery increment, implemented in open PR #13: settings persistence/error handling, course refresh without losing selection, detection of unavailable selections, and automatic recovery on network return. Synthetic regressions cover first-run persistence, private settings, expired sessions (401/login HTML), rejected credentials, and manual/pause behavior. Swift CodeQL scans native/build changes and verifies first-party source-archive coverage; known documentation/Python-only PRs skip Swift extraction.
 
-## Verified in the initial native implementation
+## Next work, in priority order
 
-November 1, 2026: the initial native implementation passed synthetic tests and an opt-in live Göttingen login/course/file/download check. A release app was installed in `~/Applications`, its signature verified, and the German first-run window inspected. Native tests cover path traversal/symlinks, pagination, rejected login, HTML attachment/session distinction, unavailable course areas, duplicate course titles, edited-file preservation, atomic updates, cancellation, and incorrect download sizes. No development schedule was saved; the owner subsequently instructed that none be created. Hosted reviews posted findings without implementing or pushing fixes; local development addressed them. Automatic repair and merge remain unverified platform capabilities.
+1. **Inventory full Python-to-Swift functional parity.** Compare the Python CLI's behavior with native implementations and tests; keep a concise parity table here as work proceeds. Cover authentication, semester/course selection, configuration/filtering, downloads and conflict handling, MediaCast/Opencast, and plugin behavior including Google Tasks. Use this inventory to implement missing behavior in focused PRs with native regression tests, including the explicit tasks below. Do not silently redefine parity around the features already ported.
+2. **Previous semesters.** Let users browse/select courses from earlier semesters and retain those choices across refreshes, restarts, and syncs. Replace the current-semester-only catalog assumption while preserving stable course IDs, safe paths, and existing local files. Count this toward the parity work rather than implementing it twice.
+3. **Guided onboarding and polished UI.** Replace the all-at-once setup form with a step-by-step flow for sign-in, folder choice, course/semester selection, and first sync. Support back navigation, clear progress, validation, and recoverable errors. Reuse the existing Classic Fold logo and its colors throughout the interface; finish German/English text, keyboard navigation, and light/dark appearance. Add developer-run checks for the flow and resources; no end-user acceptance checklist is required here.
+4. **Measure and improve CodeQL dependency costs.** Compare cold/warm runs for Swift Atomics, SwiftSoup, and LRUCache from `Package.resolved`; separate package fetching, silent startup, compilation, and analysis time. Evaluate SwiftPM source/download caches keyed by platform, toolchain, and dependency resolution. Keep only measured improvements and preserve first-party extraction. Do not restore a blanket compiled `.build` cache into the traced build. Recheck upstream support before enabling CodeQL's built-in dependency cache for Swift. See the investigation below.
+5. **Complete developer verification and efficiency work.** Extend native integration coverage for remaining parity gaps, interrupted downloads, onboarding/reconnect, Start at Login, and recovery after sleep. Run relevant tests/builds and university read-only checks when authentication is available. Profile idle CPU, memory, wakeups, and battery impact; fix measured regressions. Record evidence in the implementing PR and this roadmap instead of assigning checks to end users.
+6. **Finish the Swift rewrite and remove Python completely after full parity is proven.** Close every remaining gap in the parity inventory. Port remaining verification/CI helpers to Swift or shell, including scan-scope and source-archive checks. Remove the Python package, plugins, tests, packaging, dependency/lock files, Python CI/CodeQL/Dependabot entries, and Python requirements/instructions throughout scripts, Actions, README, `AGENTS.md`, and other documentation. Update required GitHub checks alongside the workflow transition so obsolete Python checks cannot block every PR. Rewrite this roadmap around the native app and verify a clean checkout can build/test/package without Python. Keep repository history intact.
+7. **Downloadable GitHub releases.** Add a tagged release workflow that builds a ready-to-run `.app`, verifies the bundle, packages it as a downloadable archive, and publishes release notes/checksums on GitHub Releases. Start with an ad-hoc-signed or unsigned Apple Silicon build for macOS 15+; no paid Developer ID is required for this milestone. Document installation and the macOS Privacy & Security approval needed to open an unnotarized download. Validate the packaged artifact, not just the build directory.
 
-## Recovery after PR #3
+## CodeQL cache investigation
 
-The initial native PR was merged before its last two findings were addressed. Follow-up PR #11 repaired the findings; obsolete revert PR #6 was closed without merging. PR #12 consolidated dependency updates. The fixes add scheduled offline-startup recovery and stable file/folder identity markers to avoid normalized-path collisions, with regressions that do not access personal credentials. Master requires resolved review conversations; queued auto-merge is still prohibited until the current commit has a clean review. Files at the prototype's older paths are preserved when the new naming scheme is used.
+The package graph is SwiftSoup 2.11.3 plus transitive LRUCache 1.3.0 and Swift Atomics 1.3.1. Package pre-resolution before tracing was already tested: 15m57s versus an earlier 14m22s job, with a long silent startup still present. It was removed; do not repeat it as an untested optimization. These timings are individual runs, not a controlled performance guarantee.
 
-## Current acceptance increment (PR #13)
+GitHub documents built-in CodeQL dependency caching for Java, Go, and C#, not Swift ([supported languages](https://docs.github.com/en/code-security/concepts/code-scanning/codeql/codeql-for-compiled-languages#about-dependency-caching-for-codeql)). Its Swift guidance recommends a clean build because compilation caches can skip the compilation needed for extraction ([build guidance](https://docs.github.com/en/code-security/tutorials/customize-code-scanning/prepare-code-for-analysis)). Source/download caching may save fetch time; it does not eliminate Atomics compilation. Measure all three packages before choosing a cache, and keep security coverage intact.
 
-- [x] Synthetic first-run sign-in, course/folder selection, settings reload, private file permissions, and failure to save settings. Tests inject credential storage and never access personal Keychain items.
-- [x] Refresh enrollment without losing selections; refresh before syncing and report when selected courses are no longer available.
-- [x] Synthetic expired sessions (401 and login HTML): reauthenticate once; stop after rejected credentials.
-- [x] Resume configured automatic sync on offline-to-online transitions, including a transition during a failing request. Preserve manual/pause choices and stop retries after rejected credentials.
-- [x] Keep both required CodeQL jobs; skip Swift extraction only for known unrelated PR changes, and verify source-archive coverage on full scans. A package pre-resolution experiment did not improve measured runtime and was removed.
-- [ ] Complete interactive setup and reconnect with the university, including interrupted downloads and Start at Login. Verify network recovery after sleep on a real Mac.
-- [ ] Inspect German/English layout, keyboard navigation, VoiceOver, and light/dark appearance. No computer-use validation is authorized in this development session.
-- [ ] Profile idle CPU, memory, wakeups, and battery impact before calling acceptance complete.
+## Defaults and later distribution
 
-## Defaults
+Göttingen only, macOS 15+, Apple Silicon first. Ordinary Finder folders, hourly sync by default, no mirrored deletion. Replace untouched files atomically; preserve local edits alongside incoming versions. Keychain credentials, session reuse, and one re-login on expiry.
 
-Göttingen only, macOS 15+, Apple Silicon personal release. Ordinary folders; hourly sync; no mirrored deletion. Replace untouched files without old backups. Preserve user edits alongside a collision-safe incoming version. Keychain credentials, session reuse, one re-login on expiry.
-
-## Public-release roadmap
-
-Developer ID signing/notarization, clean-machine installation, signed updates, support policy, private reporting, Intel/minimum-OS evaluation. No App Store submission, Python bundle, Finder extension, or multi-university framework for the personal version.
+After downloadable personal builds: Developer ID signing/notarization, signed updates, wider hardware support, and clean-machine distribution testing. No App Store submission, bundled Python runtime, Finder extension, or multi-university framework is planned for the current scope.

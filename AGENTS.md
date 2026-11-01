@@ -12,6 +12,7 @@ StudSync is a native Swift/SwiftUI menu-bar app for Universität Göttingen Stud
 - Add focused regression tests for nontrivial changes; keep existing checks passing.
 - Never use OpenAI API credentials or API-billed Codex Actions. Use the owner's ChatGPT subscription; GitHub CI runs conventional tools only.
 - Follow `docs/ROADMAP.md`. Continue the highest-priority unfinished task, test it, and create/update a focused PR against `master`. Keep one development PR active. Development agents must not approve or merge PRs.
+- Maintain `docs/ROADMAP.md` in every PR: record implemented work, remaining gaps, and relevant verification; distinguish work in an open PR from merged work. Before starting the next task, reconcile the roadmap with merged/open PRs and the code so completed or in-progress features are not implemented twice. After a PR closes, reconcile its outcome in the next development update; revert completion claims for reverted or abandoned work.
 - Do not create a separate local reviewer, security schedule, or merge bot.
 
 ## Automatic code-review agent: repair, push, re-review, merge
