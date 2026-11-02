@@ -1,5 +1,7 @@
 import Foundation
 import Testing
+import Observation
+import ServiceManagement
 import StudSyncCore
 @testable import StudSyncApp
 
@@ -23,6 +25,7 @@ private final class RequestCount: @unchecked Sendable {
     private let lock = NSLock()
     private var value = 0
     func increment() -> Int { lock.withLock { value += 1; return value } }
+    var total: Int { lock.withLock { value } }
 }
 
 @Suite(.serialized) @MainActor
@@ -266,5 +269,54 @@ struct AppStoreTests {
             #expect(!store.isBusy)
             #expect(!store.signedIn)
         }
+    }
+    @Test func launchAtLoginTracksRegistrationApprovalAndExternalChanges() throws {
+        var status = SMAppService.Status.notRegistered
+        var rejectChange = false
+        let support = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: support) }
+        let store = AppStore(support: support, readCredentials: { nil }, writeCredentials: { _ in },
+                             readLaunchAtLogin: { status }, updateLaunchAtLogin: { enabled in
+            if rejectChange { throw URLError(.noPermissionsToReadFile) }
+            status = enabled ? .requiresApproval : .notRegistered
+        })
+        let updates = RequestCount()
+        withObservationTracking { _ = store.launchAtLogin } onChange: { _ = updates.increment() }
+        #expect(!store.launchAtLogin)
+        store.setLaunchAtLogin(true)
+        #expect(store.launchAtLogin)
+        #expect(store.launchAtLoginStatus == .requiresApproval)
+        #expect(updates.total == 1)
+        status = .enabled
+        store.refreshLaunchAtLogin()
+        #expect(store.launchAtLoginStatus == .enabled)
+        rejectChange = true
+        store.setLaunchAtLogin(false)
+        #expect(store.launchAtLogin)
+        #expect(store.message != nil)
+        rejectChange = false
+        store.setLaunchAtLogin(false)
+        #expect(!store.launchAtLogin)
+        status = .enabled
+        store.refreshLaunchAtLogin()
+        #expect(store.launchAtLogin)
+    }
+    @Test func setupSyncActionRespectsPauseAndIncompleteConfiguration() {
+        let store = store()
+        defer { store.setPaused(true) }
+        store.signedIn = true
+        store.preferences.setupComplete = false
+        #expect(store.canStartSync)
+        #expect(!store.canSync)
+        store.setPaused(true)
+        store.finishSetup()
+        #expect(!store.preferences.setupComplete)
+        #expect(!store.isBusy)
+        #expect(!store.canStartSync)
+        store.setPaused(false)
+        store.preferences.destination = ""
+        #expect(!store.canStartSync)
+        store.finishSetup()
+        #expect(!store.preferences.setupComplete)
     }
 }

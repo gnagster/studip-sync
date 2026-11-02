@@ -11,8 +11,15 @@ Develop native Swift for Universität Göttingen. Parity means the app's current
 - [x] Foundation: agent/security instructions, CI, Dependabot, build/run and verification actions, and manual development workflow. Hosted review posts feedback; its requested repair/push/merge capabilities remain unverified and are documented in `docs/AUTOMATION.md`, rather than blocking this milestone.
 - [x] Core: authenticated JSON-API, selected courses, safe paths, atomic downloads, local-edit preservation, and regression tests. PR #11 repaired the initial native findings; obsolete revert PR #6 was closed without merging. PR #12 consolidated dependency updates.
 - [x] Personal app: Keychain setup, menu-bar stats/recent changes, settings, cancellation, background sync, Finder actions, and optional Start at Login.
-- [x] Logo: Classic Fold logo, bundled app icon, setup/header branding, and README image are implemented in open PR #13. Do not recreate these assets; use their existing colors and resources for UI work.
-- [x] Setup and recovery increment, implemented in open PR #13: settings persistence/error handling, course refresh without losing selection, detection of unavailable selections, and automatic recovery on network return. Synthetic regressions cover first-run persistence, private settings, expired sessions (401/login HTML), rejected credentials, and manual/pause behavior. Swift CodeQL scans native/build changes and verifies first-party source-archive coverage; known documentation/Python-only PRs skip Swift extraction.
+- [x] Logo: Classic Fold logo, bundled app icon, setup/header branding, and README image merged in PR #13. Do not recreate these assets; use their existing colors and resources for UI work.
+- [x] Setup and recovery increment, merged in PR #13: settings persistence/error handling, course refresh without losing selection, detection of unavailable selections, and automatic recovery on network return. Synthetic regressions cover first-run persistence, private settings, expired sessions (401/login HTML), rejected credentials, and manual/pause behavior. Swift CodeQL scans native/build changes and verifies first-party source-archive coverage; known documentation/Python-only PRs skip Swift extraction.
+
+## Current issue work
+
+Address reported defects before starting more features. One development PR at a time.
+
+- Issues #15 and #16 are implemented on `codex/settings-feedback`, pending PR review: observable Start at Login registration status, explicit pending-approval guidance, refresh after returning from System Settings, and a fixed top area for sync/cancel, progress, and login/sync errors. November 2 verification passed 17 Python tests, the 35-test native suite (opt-in live check skipped), release packaging/signature checks, and whitespace validation. Synthetic tests cover registration/approval/external changes, rejected registration changes, and setup action eligibility without changing real login items. Visual and actual system-registration checks remain unverified.
+- Issue #14 is still open and next: use readable Finder names without routine identity suffixes. Preserve separate identities for normalized/case-colliding names and existing local edits; do not simply strip ID markers from `SafePath.remoteComponent`. Implement safe identity/collision handling and regressions in a separate focused PR after the settings fix lands.
 
 ## Next work, in priority order
 
