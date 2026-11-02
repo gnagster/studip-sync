@@ -20,6 +20,7 @@ final class AppStore {
     var total = 0
     var bytes: Int64 = 0
     var showWebLogin = false
+    private(set) var launchAtLoginStatus: SMAppService.Status
     var changes: [Change] { preferences.changes }
     let client: StudIPClient
     var nextSync: Date?
@@ -33,14 +34,23 @@ final class AppStore {
     private var networkRecoveryPending = false
     private let support: URL
     private let writeCredentials: (Credentials) throws -> Void
+    private let readLaunchAtLogin: () -> SMAppService.Status
+    private let updateLaunchAtLogin: (Bool) throws -> Void
     private var settingsURL: URL { support.appendingPathComponent("settings.json") }
 
     init(support: URL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("StudSync"),
          client: StudIPClient = StudIPClient(),
          readCredentials: () throws -> Credentials? = CredentialVault.read,
-         writeCredentials: @escaping (Credentials) throws -> Void = CredentialVault.save) {
+         writeCredentials: @escaping (Credentials) throws -> Void = CredentialVault.save,
+         readLaunchAtLogin: @escaping () -> SMAppService.Status = { SMAppService.mainApp.status },
+         updateLaunchAtLogin: @escaping (Bool) throws -> Void = { enabled in
+             if enabled { try SMAppService.mainApp.register() }
+             else { try SMAppService.mainApp.unregister() }
+         }) {
         self.support = support; self.client = client
         self.writeCredentials = writeCredentials
+        self.readLaunchAtLogin = readLaunchAtLogin; self.updateLaunchAtLogin = updateLaunchAtLogin
+        launchAtLoginStatus = readLaunchAtLogin()
         do { engine = try SyncEngine(manifest: support.appendingPathComponent("manifest.json")) }
         catch { storageError = error.localizedDescription; message = storageError }
         do {
@@ -83,7 +93,7 @@ final class AppStore {
         }
     }
     func finishSetup() {
-        guard !isBusy, signedIn, !preferences.destination.isEmpty, !preferences.selectedCourses.isEmpty else { return }
+        guard !isBusy, canStartSync else { return }
         let wasComplete = preferences.setupComplete
         preferences.setupComplete = true
         guard save() else {
@@ -114,9 +124,8 @@ final class AppStore {
         guard !path.isEmpty else { return }
         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
     }
-    var canSync: Bool {
-        signedIn && !paused && preferences.setupComplete && !preferences.destination.isEmpty && !preferences.selectedCourses.isEmpty
-    }
+    var canStartSync: Bool { signedIn && !paused && !preferences.destination.isEmpty && !preferences.selectedCourses.isEmpty }
+    var canSync: Bool { canStartSync && preferences.setupComplete }
     func refreshCourses() {
         guard !isBusy, signedIn else { return }
         retrySyncWhenOnline = false
@@ -213,12 +222,12 @@ final class AppStore {
     }
     func setPaused(_ value: Bool) { paused = value; schedule() }
     func setLaunchAtLogin(_ value: Bool) {
-        do {
-            if value { try SMAppService.mainApp.register() }
-            else { try SMAppService.mainApp.unregister() }
-        } catch { message = error.localizedDescription }
+        defer { refreshLaunchAtLogin() }
+        do { try updateLaunchAtLogin(value) }
+        catch { message = error.localizedDescription }
     }
-    var launchAtLogin: Bool { SMAppService.mainApp.status == .enabled }
+    func refreshLaunchAtLogin() { launchAtLoginStatus = readLaunchAtLogin() }
+    var launchAtLogin: Bool { launchAtLoginStatus == .enabled || launchAtLoginStatus == .requiresApproval }
     func importCLI() {
         let path = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".config/studip-sync/config.json")
         struct OldConfig: Decodable {

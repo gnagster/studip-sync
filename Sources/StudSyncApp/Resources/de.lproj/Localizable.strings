@@ -25,6 +25,8 @@
 "Hourly" = "Stündlich";
 "Every 4 hours" = "Alle 4 Stunden";
 "Start at Login" = "Bei Anmeldung starten";
+"Allow StudSync in System Settings to finish enabling Start at Login." = "Erlaube StudSync in den Systemeinstellungen, um den Start bei Anmeldung zu aktivieren.";
+"Open Login Items…" = "Anmeldeobjekte öffnen …";
 "StudSync stays in your menu bar when this window closes." = "StudSync läuft nach dem Schließen in der Menüleiste weiter.";
 "Start syncing" = "Synchronisierung starten";
 "Sync now" = "Jetzt synchronisieren";

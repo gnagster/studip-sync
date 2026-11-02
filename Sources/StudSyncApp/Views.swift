@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import WebKit
+import ServiceManagement
 import StudSyncCore
 
 let appResourceBundle = Bundle.main.resourceURL
@@ -159,18 +160,38 @@ struct SetupView: View {
                     Spacer()
                     Toggle(L("Start at Login"), isOn: Binding(get: { store.launchAtLogin }, set: { store.setLaunchAtLogin($0) }))
                 }.disabled(store.isBusy)
-                if let message = store.message {
-                    Label(L(message), systemImage: "info.circle").font(.callout).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true)
+                if store.launchAtLoginStatus == .requiresApproval {
+                    Text(L("Allow StudSync in System Settings to finish enabling Start at Login."))
+                        .font(.caption).foregroundStyle(.secondary)
+                    Button(L("Open Login Items…")) { SMAppService.openSystemSettingsLoginItems() }
                 }
-                HStack {
-                    Text(L("StudSync stays in your menu bar when this window closes.")).font(.caption).foregroundStyle(.secondary)
-                    Spacer()
-                    Button(L(store.preferences.setupComplete ? "Sync now" : "Start syncing")) { store.finishSetup() }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(!store.signedIn || store.preferences.destination.isEmpty || store.preferences.selectedCourses.isEmpty || store.isBusy)
-                }
+                Text(L("StudSync stays in your menu bar when this window closes.")).font(.caption).foregroundStyle(.secondary)
             }.padding(26)
         }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text(L(store.paused ? "Paused" : store.status)).font(.subheadline)
+                    Spacer()
+                    if store.isBusy { ProgressView().controlSize(.small) }
+                    Button(L(store.isBusy ? "Cancel" : (store.preferences.setupComplete ? "Sync now" : "Start syncing"))) {
+                        if store.isBusy { store.cancel() } else { store.finishSetup() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!store.isBusy && !store.canStartSync)
+                }
+                if store.isBusy && store.total > 0 {
+                    ProgressView(value: Double(store.completed), total: Double(store.total))
+                }
+                if let message = store.message {
+                    Label(L(message), systemImage: "info.circle").font(.callout).foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+                }
+            }
+            .padding(.horizontal, 26).padding(.vertical, 14).frame(maxWidth: .infinity, alignment: .leading)
+            .background(.bar)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in store.refreshLaunchAtLogin() }
         .onChange(of: store.preferences.intervalMinutes) { store.save(); store.schedule() }
         .onChange(of: store.preferences.selectedCourses) { store.save(); store.schedule() }
         .sheet(isPresented: $store.showWebLogin) { WebLogin(store: store) }
